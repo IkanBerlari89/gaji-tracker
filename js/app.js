@@ -23,7 +23,7 @@
   var TABS = [['home', 'Home', 'home'], ['cal', 'Calendar', 'cal'], ['imp', 'Import', 'imp'], ['plan', 'Plan', 'plan'], ['more', 'More', 'more']];
 
   var t0 = U.today(), cur = U.ymOf(t0.y, t0.m);
-  var UI = Ga.UI = { tab: 'home', sub: 'rules', ym: cur, brush: 'edit', heroScope: 'half', chartScope: 'half', ahead: 3, aheadFill: 'none', plStart: cur, plN: 3, plFillOpen: false, plClearArm: false, cmpOpen: false, planYm: cur,
+  var UI = Ga.UI = { tab: 'home', sub: 'rules', ym: cur, brush: 'edit', heroScope: 'half', chartScope: 'half', otScope: 'half', trackDate: null, trkType: null, trkOut: null, ahead: 3, aheadFill: 'none', plStart: cur, plN: 3, plFillOpen: false, plClearArm: false, cmpOpen: false, planYm: cur,
     planA: { mt: '17:30', fr: '17:30', sa: '11:30', ph: 'rest' }, planB: { mt: '18:30', fr: '18:30', sa: '17:00', ph: 'rest' },
     promptYm: cur, promptHalf: t0.d <= 15 ? 1 : 2, pending: null, clearArm: false, targetOpen: false, rulesOpen: false };
 
@@ -82,6 +82,21 @@
     try { location.hash = UI.tab; } catch (e) {}
   };
 
+  /* ---- daily tracker ---- */
+  A.parseIso = function (s) { return { y: +s.slice(0, 4), m: +s.slice(5, 7), d: +s.slice(8, 10), ym: s.slice(0, 7) }; };
+  A.shiftIso = function (s, k) { var p = A.parseIso(s), d = new Date(p.y, p.m - 1, p.d + k); return U.iso(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
+  A.trkSave = function (UI) {
+    var S = St.S, p = A.parseIso(UI.trackDate), e = (S.months[p.ym] || {})[U.pad(p.d)], ty = U.dayType(p.y, p.m, p.d);
+    var type = UI.trkType != null ? UI.trkType : (e ? (e.k === 'W' ? 'W' : e.k) : ''), out = UI.trkOut || (e && e.out) || (ty === 'SA' ? '13:00' : '18:00'), ent;
+    if (type === '') ent = null; else if (type === 'W') ent = Object.assign({}, e && e.real && e.k === 'W' && e.out === out ? e : {}, { k: 'W', out: out }); else ent = Object.assign({}, e && e.real && e.k === type ? e : {}, { k: type });
+    A.setDay(p.ym, p.d, ent, 'Tracker ' + UI.trackDate + ' ' + (ent ? (ent.out || ent.k) : 'clear'));
+    var miss = Ga.missing(), next = miss.filter(function (k) { return k > UI.trackDate; })[0] || miss[0];
+    UI.trkType = null; UI.trkOut = null;
+    Ga.toast('Saved ' + p.d + ' ' + U.MON3[p.m - 1] + (next ? ' · next: ' + (+next.slice(8, 10)) + ' ' + U.MON3[+next.slice(5, 7) - 1] : miss.length ? '' : ' · all days filled'));
+    if (next) UI.trackDate = next;
+    Ga.render();
+  };
+
   /* ---- payslip sheet ---- */
   A.openSlip = function (key) {
     var S = St.S, isNew = !key, r = key ? S.records[key] : null, ps = r && r.payslip || {}, cp = U.currentPeriod(), ym = key ? key.slice(0, 7) : cp.ym, hf = key ? +key.slice(8) : cp.h;
@@ -116,7 +131,7 @@
     document.getElementById('suGo').onclick = function () {
       var b = U.num(document.getElementById('suBasic').value); if (!(b > 0)) { Ga.toast('Type your basic salary first'); return; }
       st.basic = b; st.basicBefore = U.num(document.getElementById('suBefore').value) || b; st.raiseFrom = document.getElementById('suFrom').value; st.startYm = document.getElementById('suStart').value;
-      st.alLeft = U.num(document.getElementById('suAl').value) || 0; st.alQuota = U.num(document.getElementById('suAlQ').value) || 8; var t = U.today(); st.alAsOf = U.iso(t.y, t.m, t.d);
+      st.alLeft = U.num(document.getElementById('suAl').value) || 0; st.alQuota = U.num(document.getElementById('suAlQ').value) || 8; var t = U.today(); st.alAsOf = U.iso(t.y, t.m, t.d); st.trackFrom = st.alAsOf;
       St.touch('settings', 'First setup'); Ga.closeLayer(); Ga.render(); Ga.toast('Ready. Tap a day in the calendar to begin.');
     };
     document.getElementById('suSync').onclick = function () { Ga.closeLayer(); UI.sub = 'sync'; Ga.go('more'); };
@@ -137,6 +152,12 @@
     var t = e.target.closest('button,[data-day]'); if (!t) return; var ds = t.dataset, S = St.S;
     if (ds.hero) { UI.heroScope = ds.hero; Ga.render(); }
     else if (ds.chartScope) { UI.chartScope = ds.chartScope; Ga.render(); }
+    else if (ds.otScope) { UI.otScope = ds.otScope; Ga.render(); }
+    else if (ds.trk) { var t1 = U.today(); UI.trackDate = ds.trk === 'today' ? U.iso(t1.y, t1.m, t1.d) : A.shiftIso(UI.trackDate, +ds.trk); UI.trkType = null; UI.trkOut = null; Ga.render(); }
+    else if (ds.jump) { UI.trackDate = ds.jump; UI.trkType = null; UI.trkOut = null; Ga.go('home'); }
+    else if (ds.trkq != null) { var q = ds.trkq; if (q.indexOf('t:') === 0) { UI.trkType = 'W'; UI.trkOut = q.slice(2); } else UI.trkType = q; Ga.render(); }
+    else if (ds.act === 'trkSave') A.trkSave(UI);
+    else if (ds.act === 'trkClear') { var pc = A.parseIso(UI.trackDate); A.setDay(pc.ym, pc.d, null, 'Tracker clear ' + UI.trackDate); UI.trkType = null; UI.trkOut = null; Ga.render(); Ga.toast('Cleared ' + pc.d + ' ' + U.MON3[pc.m - 1]); }
     else if (ds.ahead) { UI.ahead = +ds.ahead; Ga.render(); }
     else if (ds.goym) { UI.ym = ds.goym; if (ds.go) Ga.go(ds.go); else { Ga.render(); window.scrollTo(0, 0); } }
     else if (ds.plstep) { UI.plN = Math.min(48, Math.max(1, UI.plN + +ds.plstep)); UI.plClearArm = false; Ga.render(); }
@@ -178,7 +199,10 @@
   document.getElementById('main').addEventListener('change', function (e) {
     var id = e.target.id, v = e.target.value;
     if (e.target.dataset.tgr || e.target.dataset.tgdow) { V.readTgRules(UI); return; }
-    if (id === 'planYm') { UI.planYm = v; Ga.render(); }
+    if (id === 'trkDate') { if (/^\d{4}-\d{2}-\d{2}$/.test(v)) { UI.trackDate = v; UI.trkType = null; UI.trkOut = null; Ga.render(); } }
+    else if (id === 'trkType') { UI.trkType = v; Ga.render(); }
+    else if (id === 'trkOut') { UI.trkOut = v; UI.trkType = 'W'; Ga.render(); }
+    else if (id === 'planYm') { UI.planYm = v; Ga.render(); }
     else if (id === 'aheadFill') { UI.aheadFill = v; Ga.render(); }
     else if (id === 'plStart') { UI.plStart = v; Ga.render(); }
     else if (id === 'plN') { var nn = Math.min(48, Math.max(1, Math.round(+v) || 1)); UI.plN = nn; UI.plClearArm = false; Ga.render(); }

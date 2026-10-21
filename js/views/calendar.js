@@ -24,7 +24,7 @@
   /* One month grid (shared). Every day button carries data-ym so the Plan tab can show many months at once. */
   V.monthGrid = function (ym, days, sugg, compact) {
     var p = U.parseYm(ym), n = U.daysIn(p.y, p.m), td = U.today(), first = new Date(p.y, p.m - 1, 1).getDay(), lead = (first + 6) % 7, isCur = td.y === p.y && td.m === p.m;
-    var h = '<div class="cal' + (compact ? ' compact' : '') + '">';
+    var h = '<div class="cal' + (compact ? ' compact' : '') + '">', missSet = {}; Ga.missing().forEach(function (k) { missSet[k] = 1; });
     ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(function (d) { h += '<div class="dow' + (d === 'Sun' ? ' sun' : '') + '">' + d + '</div>'; });
     var cells = [], i;
     for (i = 0; i < lead; i++) cells.push('<div class="day pad"></div>');
@@ -34,10 +34,10 @@
         var lead2 = (new Date(p.y, p.m - 1, 16).getDay() + 6) % 7; for (i = 0; i < lead2; i++) cells.push('<div class="day pad"></div>');
       }
       var e = days[pad(d)], sg = sugg ? sugg[pad(d)] || null : null, c = R.dayCalc(ym, d, sg || e), isT = isCur && td.d === d;
-      var k = c.kind === 'early' ? 'k-early' : c.kind === 'half' ? 'k-norm' : c.kind === 'empty' ? '' : 'k-' + c.kind;
-      var lbl = c.label || (c.t === 'SU' ? '' : '—');
+      var k = c.kind === 'early' ? 'k-early' : c.kind === 'half' ? 'k-norm' : c.kind === 'empty' ? '' : 'k-' + c.kind, isMiss = !e && missSet[U.iso(p.y, p.m, d)];
+      var lbl = c.label || (c.t === 'SU' ? '' : isMiss ? '?' : '—');
       var rm = c.t === 'SU' && !c.ot2 ? '' : (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total));
-      cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(lbl) + '">' +
+      cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(lbl) + '">' +
         '<span class="dn">' + d + (c.ph ? IC().flag : '') + (c.real ? '<span class="real-dot" title="From time card"></span>' : '') + '</span>' +
         '<span class="lbl">' + esc(lbl) + '</span>' + (c.dlab ? '<span class="dl ' + (c.dh > 0 ? 'pos' : c.dh < 0 || c.up ? 'neg' : '') + '">' + esc(c.dlab) + '</span>' : '') + (sg ? '<span class="tag sg">TARGET</span>' : c.nr ? '<span class="tag">NR</span>' : '') +
         '<span class="rm">' + (rm === '' ? '' : 'RM' + rm) + '</span></button>');
@@ -53,7 +53,7 @@
     h += '<div class="cal-head"><button class="icon-btn" data-mon="-1" aria-label="Previous month">' + IC().left + '</button><div style="text-align:center"><h2>' + MONTHS[p.m - 1] + ' ' + p.y + '</h2><span class="tiny muted">Basic RM' + fm(M.r.basic) + ' · OT RM' + fm(M.r.r15) + '/h</span><div style="margin-top:4px">' + V.alChip(p.y) + (isCur ? '' : ' <button class="chip accent" data-act="calToday" style="border:0;cursor:pointer">Today</button>') + '</div></div><button class="icon-btn" data-mon="1" aria-label="Next month">' + IC().right + '</button></div>';
     h += V.brushBar(UI, p.y, M);
     h += '<div class="card" style="padding:10px">' + V.monthGrid(ym, days, sugg) + '</div>';
-    h += '<div class="legend"><span><i style="background:var(--amber-soft)"></i>OT</span><span><i style="background:var(--good-soft)"></i>2× day</span><span><i style="background:var(--blue-soft)"></i>Leave / PH</span><span><i style="background:var(--bad-soft)"></i>Unpaid / AL ✕</span><span>' + IC().flag + 'Public holiday</span><span><span class="real-dot"></span>From time card</span><span><i style="border:1.5px dashed var(--accent);background:transparent"></i>Target suggestion</span></div>';
+    h += '<div class="legend"><span><i style="background:var(--amber-soft)"></i>OT</span><span><i style="background:var(--good-soft)"></i>2× day</span><span><i style="background:var(--blue-soft)"></i>Leave / PH</span><span><i style="background:var(--bad-soft)"></i>Unpaid / AL ✕</span><span>' + IC().flag + 'Public holiday</span><span><span class="real-dot"></span>From time card</span><span><i style="border:1.5px dashed var(--accent);background:transparent"></i>Target suggestion</span><span><i style="border:1.5px dashed var(--bad);background:transparent"></i>Not filled yet</span></div>';
     h += '<p class="tiny muted">Each day shows clock-out, <b style="color:var(--good)">+</b>/<b style="color:var(--bad)">−</b> hours against the normal end (17:30, Sat 11:30), and the day total in RM (base ' + (S.settings.baseMode === 'hour' ? 'by scheduled hours' : 'RM' + fm(M.r.day) + '/day') + ' + OT − unpaid). An empty weekday counts as a normal day.</p>';
     h += '</div><div class="col">';
     h += V.target(UI, ym, M, tg);

@@ -13,23 +13,32 @@
     return { label: d.getDate() + ' ' + MON3[d.getMonth()], days: days, approx: true };
   }
   function daysLeft(cp) { var p = U.parseYm(cp.ym), t = U.today(), end = cp.h === 1 ? 15 : U.daysIn(p.y, p.m), n = 0; for (var d = t.d; d <= end; d++) if (U.dayType(p.y, p.m, d) !== 'SU') n++; return n; }
+  function parseIso(s) { return { y: +s.slice(0, 4), m: +s.slice(5, 7), d: +s.slice(8, 10), ym: s.slice(0, 7) }; }
+  function shiftIso(s, k) { var p = parseIso(s), d = new Date(p.y, p.m - 1, p.d + k); return U.iso(d.getFullYear(), d.getMonth() + 1, d.getDate()); }
+  function niceDate(s) { var p = parseIso(s); return U.DOWL[new Date(p.y, p.m - 1, p.d).getDay()] + ', ' + p.d + ' ' + MON3[p.m - 1] + ' ' + p.y; }
+  Ga.trackFrom = function () { var tf = St.S.settings.trackFrom; if (/^\d{4}-\d{2}-\d{2}$/.test(tf || '')) return tf; var t = U.today(); return U.iso(t.y, t.m, 1); };
+  Ga.missing = function () { return R.missingDays(Ga.trackFrom(), R.yesterdayIso()); };
 
   V.home = function (UI) {
-    var S = St.S, cp = U.currentPeriod(), M = R.monthMoney(cp.ym), H = R.halves(cp.ym), isHalf = UI.heroScope === 'half';
-    var amt = isHalf ? (cp.h === 1 ? M.half1 : M.half2) : M.net, hh = H[cp.h], rec = S.records[cp.ym + '-' + cp.h], y = U.parseYm(cp.ym).y;
+    var S = St.S, t = U.today(), todayIso = U.iso(t.y, t.m, t.d);
+    if (!UI.trackDate) UI.trackDate = todayIso;
+    var td = parseIso(UI.trackDate), cp = { ym: td.ym, h: td.d <= 15 ? 1 : 2 }, M = R.monthMoney(cp.ym), H = R.halves(cp.ym), hh = H[cp.h];
+    var half = cp.h === 1 ? M.half1 : M.half2, rec = S.records[cp.ym + '-' + cp.h], y = td.y, miss = Ga.missing();
     var h = '<div class="home"><div class="col">';
-    h += '<section class="hero" aria-label="Estimate"><div class="row" style="justify-content:space-between;position:relative;z-index:1"><span class="eyebrow">' + (isHalf ? 'Estimated pay · ' + U.periodName(cp.ym, cp.h) : 'Estimated take-home · ' + MONTHS[U.parseYm(cp.ym).m - 1] + ' ' + y) + '</span>' +
-      '<div class="hero-seg"><button data-hero="half" aria-pressed="' + isHalf + '">Half</button><button data-hero="month" aria-pressed="' + !isHalf + '">Month</button></div></div>' +
-      '<div class="hero-amt"><small>RM</small>' + fm(amt) + '</div>' +
-      '<div class="hero-sub">' + (isHalf ? (cp.h === 1 ? '1st half has no deductions.' : 'All of the month\'s deductions come off this half.') : 'Gross RM' + fm(M.gross) + ' − deductions RM' + fm(M.ded)) + (rec && rec.payslip && rec.payslip.net != null ? ' · Payslip: RM' + fm(rec.payslip.net) : '') + '</div>' +
-      '<div class="hero-row"><div><span>OT 1.5×</span><b>' + fh(isHalf ? hh.ot : M.ot) + 'h</b></div><div><span>OT 2×</span><b>' + fh(isHalf ? hh.ot2 : M.ot2) + 'h</b></div><div><span>Unpaid</span><b>' + (isHalf ? hh.up : M.up) + 'd</b></div><div><span>NR days</span><b>' + (isHalf ? hh.nr : M.nr) + '</b></div></div></section>';
-    h += todayCard(cp);
+    // hero: predicted payslip for the half of the tracked date, month total underneath
+    h += '<section class="hero" aria-label="Predicted payslip"><span class="eyebrow">Predicted payslip · ' + U.periodName(cp.ym, cp.h) + '</span>' +
+      '<div class="hero-amt"><small>RM</small>' + fm(half) + '</div>' +
+      '<div class="hero-sub">Month ' + MONTHS[td.m - 1] + ' ' + y + ': <b style="color:var(--hero-ink)">RM' + fm(M.net) + '</b> · 1st half ' + fm(M.half1) + ' + 2nd half ' + fm(M.half2) + (rec && rec.payslip && rec.payslip.net != null ? ' · actual payslip RM' + fm(rec.payslip.net) : '') + '</div>' +
+      '<div class="hero-sub" style="margin-top:4px">' + (cp.h === 1 ? '1st half has no deductions.' : 'EPF, SOCSO, EIS' + (S.settings.skbbk ? ', SKBBK' : '') + ' (RM' + fm(M.ded) + ') come off this half.') + '</div></section>';
+    h += trackerCard(UI, todayIso, miss);
+    if (miss.length) h += missingCard(miss);
+    h += otCard(UI, cp, M, H);
     var pay = nextPayday(cp), al = R.alLeft(y);
     h += '<div class="tiles">' +
       '<div class="tile"><div class="eyebrow">Next payday</div><div class="v">~' + pay.label + '</div><div class="s">' + (pay.days > 0 ? 'in ' + pay.days + ' day' + (pay.days === 1 ? '' : 's') : pay.days === 0 ? 'today' : 'passed') + ' · ' + U.halfLabel(cp.h) + '</div></div>' +
-      '<div class="tile"><div class="eyebrow">Work days left</div><div class="v">' + daysLeft(cp) + '</div><div class="s">in this half</div></div>' +
+      '<div class="tile"><div class="eyebrow">Work days left</div><div class="v">' + daysLeft(U.currentPeriod()) + '</div><div class="s">in the current half</div></div>' +
       '<button class="tile" data-go="cal"><div class="eyebrow">Annual leave ' + y + '</div><div class="v" style="color:var(--' + (al === null ? 'ink' : al <= 0 ? 'bad' : al <= 2 ? 'amber' : 'good') + ')">' + (al === null ? '—' : al + ' left') + '</div><div class="s">' + (al !== null && al <= 0 ? 'AL now counts as unpaid' : 'of ' + S.settings.alQuota + ' a year') + '</div></button>' +
-      '<div class="tile"><div class="eyebrow">OT this month</div><div class="v">RM' + fm(M.o1 + M.o2 + M.x1 + M.x2) + '</div><div class="s">' + fh(M.ot) + 'h at RM' + fm(M.r.r15) + (M.ot2 ? ' + ' + fh(M.ot2) + 'h ×2' : '') + '</div></div></div>';
+      '<div class="tile"><div class="eyebrow">Unpaid · ' + MON3[td.m - 1] + '</div><div class="v">' + (M.up ? '−RM' + fm(M.u1 + M.u2) : 'none') + '</div><div class="s">' + (M.up ? M.up + ' day' + (M.up === 1 ? '' : 's') + ' at RM' + fm(M.r.unpaid) : 'no unpaid days this month') + '</div></div></div>';
     h += '<div class="row"><button class="btn primary" data-go="cal" style="flex:1">' + IC().cal + 'Calendar</button><button class="btn" data-go="imp" style="flex:1">' + IC().imp + 'Import</button></div>';
     h += '</div><div class="col">';
     h += trendCard(UI);
@@ -38,18 +47,42 @@
     return h;
   };
 
-  /* Today: one tap to log the clock-out or a leave code on the phone. */
-  function todayCard(cp) {
-    var S = St.S, t = U.today(), ym = cp.ym, e = (S.months[ym] || {})[pad(t.d)], c = R.dayCalc(ym, t.d, e), ty = c.t;
+  /* Daily tracker: pick a date, set what happened, save. */
+  function trackerCard(UI, todayIso, miss) {
+    var S = St.S, iso = UI.trackDate, p = parseIso(iso), e = (S.months[p.ym] || {})[pad(p.d)], c = R.dayCalc(p.ym, p.d, e), ty = c.t, isToday = iso === todayIso;
+    var type = UI.trkType != null ? UI.trkType : (e ? (e.k === 'W' ? 'W' : e.k) : ''), out = UI.trkOut || (e && e.out) || (ty === 'SA' ? '13:00' : '18:00');
+    var ent = type === '' ? null : type === 'W' ? { k: 'W', out: out } : { k: type };
+    if (ent && e && e.real && type === e.k && (type !== 'W' || out === e.out)) ent = e;
+    var cc = R.dayCalc(p.ym, p.d, ent), isMiss = miss.indexOf(iso) >= 0, dirty = JSON.stringify(ent ? { k: ent.k, out: ent.out || null } : null) !== JSON.stringify(e ? { k: e.k, out: e.out || null } : null);
     var times = ty === 'SA' ? ['11:30', '12:30', '13:00', '15:00', '16:30', '17:00'] : ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30'];
-    var h = '<section class="card"><div class="card-h" style="margin-bottom:8px"><div><div class="eyebrow">Today · ' + U.DOWL[new Date(t.y, t.m - 1, t.d).getDay()] + ' ' + t.d + ' ' + MON3[t.m - 1] + (c.ph ? ' · ' + esc(c.ph) : '') + '</div><h2>' + (e ? (e.k === 'W' ? 'Out ' + esc(e.out) + (c.dlab ? ' · ' + esc(c.dlab) : '') : U.LEAVES[e.k] || e.k) : ty === 'SU' ? 'Sunday · rest day' : 'Not logged yet') + '</h2></div><span class="chip ' + (c.ot || c.ot2 ? 'amber' : c.up ? 'bad' : 'accent') + '">RM' + fm(c.total) + '</span></div>';
-    if (ty === 'SU' && !c.ph) { h += '<div class="quick"><button data-today="X2" aria-pressed="' + (!!e && (e.k === 'X2' || e.k === 'W')) + '">Worked (2×)</button>' + (e ? '<button data-today="" class="lv">Clear</button>' : '') + '</div>'; }
-    else {
-      h += '<div class="quick">' + times.map(function (x) { return '<button data-today="t:' + x + '" aria-pressed="' + (!!e && e.k === 'W' && e.out === x) + '">' + x + '</button>'; }).join('') +
-        ['AL', 'MC', 'OFF'].map(function (k) { return '<button class="lv" data-today="' + k + '" aria-pressed="' + (!!e && e.k === k) + '">' + k + '</button>'; }).join('') + (e ? '<button class="lv" data-today="">Clear</button>' : '') + '</div>';
-    }
-    if (e && e.real) h += '<p class="tiny muted" style="margin-top:8px">From the time card. Changing it here keeps the import mark.</p>';
+    var h = '<section class="card trk"><div class="card-h" style="margin-bottom:10px"><div><div class="eyebrow">Daily tracker' + (isToday ? ' · today' : '') + (c.ph ? ' · ' + esc(c.ph) : '') + '</div><h2>' + niceDate(iso) + '</h2></div>' +
+      '<span class="chip ' + (e ? (e.k === 'W' ? 'good' : 'blue') : isMiss ? 'bad' : '') + '">' + (e ? (e.k === 'W' ? 'Saved · out ' + esc(e.out) : 'Saved · ' + (U.LEAVES[e.k] || e.k)) : isMiss ? 'Not filled' : ty === 'SU' ? 'Sunday' : 'Empty') + '</span></div>';
+    h += '<div class="row trk-nav"><button class="icon-btn" data-trk="-1" aria-label="Previous day">' + IC().left + '</button><input type="date" id="trkDate" value="' + iso + '" aria-label="Pick a date" style="flex:1;min-width:0"><button class="icon-btn" data-trk="1" aria-label="Next day">' + IC().right + '</button>' + (isToday ? '' : '<button class="btn sm" data-trk="today">Today</button>') + '</div>';
+    h += '<div class="row" style="margin-top:10px"><div class="field"><label for="trkType">What happened</label><select id="trkType"><option value=""' + (type === '' ? ' selected' : '') + '>Not set' + (ty === 'SU' ? ' · rest day' : ' · counts as normal day') + '</option><option value="W"' + (type === 'W' ? ' selected' : '') + '>Worked · clock-out time</option>' +
+      Object.keys(U.LEAVES).map(function (k) { return '<option value="' + k + '"' + (type === k ? ' selected' : '') + '>' + U.LEAVES[k] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field" style="max-width:140px"><label for="trkOut">Clock out</label><input id="trkOut" type="time" value="' + esc(out) + '"' + (type === 'W' ? '' : ' disabled') + '></div></div>';
+    if (ty !== 'SU' || c.ph) h += '<div class="quick" style="margin-top:8px">' + times.map(function (x) { return '<button data-trkq="t:' + x + '" aria-pressed="' + (type === 'W' && out === x) + '">' + x + '</button>'; }).join('') + ['AL', 'MC', 'OFF', 'UPH', 'UPL'].map(function (k) { return '<button class="lv" data-trkq="' + k + '" aria-pressed="' + (type === k) + '">' + k + '</button>'; }).join('') + '</div>';
+    else h += '<div class="quick" style="margin-top:8px"><button data-trkq="X2" aria-pressed="' + (type === 'X2') + '">Worked (2×)</button></div>';
+    if (type === 'AL' && R.alLeft(p.y) !== null && R.alLeft(p.y) <= 0 && iso >= S.settings.alAsOf) h += '<div class="note warn" style="margin-top:8px">AL balance for ' + p.y + ' is 0. This AL counts as unpaid (−RM' + fm(R.rates(p.ym).unpaid) + ').</div>';
+    h += '<dl class="kv" style="margin-top:10px"><dt>OT 1.5×</dt><dd>' + fh(cc.ot) + ' h · RM' + fm(cc.otAmt) + '</dd>' + (cc.ot2 ? '<dt>OT 2×</dt><dd>' + fh(cc.ot2) + ' h · RM' + fm(cc.x2Amt) + '</dd>' : '') + (cc.up ? '<dt>Unpaid</dt><dd>−RM' + fm(cc.upAmt) + '</dd>' : '') + '<dt>Paid hours</dt><dd>' + (cc.paid != null ? fh(cc.paid) + (cc.est ? ' (est.)' : '') : '—') + '</dd><div class="sep"></div><dt>Day total</dt><dd class="big">RM' + fm(cc.total) + '</dd></dl>';
+    if (cc.nr) h += '<p class="tiny muted" style="margin-top:4px">NR shows on the time card from 19:00. The money is the OT hours.</p>';
+    if (e && e.real) h += '<p class="tiny muted" style="margin-top:4px">From the time card (in ' + esc(e['in'] || '—') + ', paid ' + (e.paid != null ? fh(e.paid) : '—') + 'h). Saving keeps the import mark.</p>';
+    h += '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="trkSave" style="flex:1"' + (dirty ? '' : ' disabled') + '>' + (dirty ? 'Save ' + p.d + ' ' + MON3[p.m - 1] : 'Saved') + '</button>' + (e ? '<button class="btn" data-act="trkClear">Clear day</button>' : '') + '</div>';
     return h + '</section>';
+  }
+  function missingCard(miss) {
+    var show = miss.slice(0, 12);
+    return '<section class="card" style="border-color:var(--bad)"><div class="card-h" style="margin-bottom:8px"><div><div class="eyebrow" style="color:var(--bad)">Not filled yet</div><h2>' + miss.length + ' day' + (miss.length === 1 ? '' : 's') + ' missing since ' + (function (s) { var p = parseIso(s); return p.d + ' ' + MON3[p.m - 1]; })(Ga.trackFrom()) + '</h2></div><span class="chip bad">tap to fill</span></div>' +
+      '<div class="quick">' + show.map(function (s) { var p = parseIso(s); return '<button class="lv" data-jump="' + s + '" style="border-color:var(--bad);color:var(--bad)">' + U.DOW3[new Date(p.y, p.m - 1, p.d).getDay()] + ' ' + p.d + ' ' + MON3[p.m - 1] + '</button>'; }).join('') + (miss.length > show.length ? '<span class="chip">+' + (miss.length - show.length) + ' more</span>' : '') + '</div>' +
+      '<p class="tiny muted" style="margin-top:8px">An empty weekday is counted as a normal day with no OT until you fill it. These days are also outlined in red on the Calendar. Change the start date in More → Settings.</p></section>';
+  }
+  function otCard(UI, cp, M, H) {
+    var isHalf = UI.otScope !== 'month', hh = H[cp.h], ot = isHalf ? hh.ot : M.ot, ot2 = isHalf ? hh.ot2 : M.ot2, otRm = isHalf ? (cp.h === 1 ? M.o1 + M.x1 : M.o2 + M.x2) : M.o1 + M.o2 + M.x1 + M.x2;
+    return '<section class="card"><div class="card-h" style="margin-bottom:8px"><h2>Overtime · ' + (isHalf ? U.periodName(cp.ym, cp.h) : MONTHS[U.parseYm(cp.ym).m - 1] + ' ' + U.parseYm(cp.ym).y) + '</h2><div class="seg"><button data-ot-scope="half" aria-pressed="' + isHalf + '">Half</button><button data-ot-scope="month" aria-pressed="' + !isHalf + '">Month</button></div></div>' +
+      '<div class="tiles"><div class="tile" style="box-shadow:none"><div class="eyebrow">OT 1.5×</div><div class="v">' + fh(ot) + 'h</div><div class="s">RM' + fm(ot * M.r.r15) + ' at RM' + fm(M.r.r15) + '/h</div></div>' +
+      '<div class="tile" style="box-shadow:none"><div class="eyebrow">OT 2× (Sun / PH)</div><div class="v">' + fh(ot2) + 'h</div><div class="s">RM' + fm(ot2 * M.r.r20) + ' at RM' + fm(M.r.r20) + '/h</div></div>' +
+      '<div class="tile" style="box-shadow:none"><div class="eyebrow">OT pay</div><div class="v">RM' + fm(otRm) + '</div><div class="s">on top of basic RM' + fm(M.r.basic / (isHalf ? 2 : 1)) + '</div></div>' +
+      '<div class="tile" style="box-shadow:none"><div class="eyebrow">NR days</div><div class="v">' + (isHalf ? hh.nr : M.nr) + '</div><div class="s">clock-out 19:00 or later</div></div></div></section>';
   }
 
   /* Trend: net and OT, by half (last 8) or by month (last 8). One axis each, hover tooltip. */

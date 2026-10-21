@@ -186,6 +186,22 @@
     return { months: out, total: tot };
   };
 
+  /* Days that should have an entry but don't: Mon–Sat, not a public holiday, from the tracker start date to 'toIso' (inclusive). */
+  R.missingDays = function (fromIso, toIso) {
+    var out = [];
+    if (!fromIso || !toIso || fromIso > toIso) return out;
+    var d = new Date(+fromIso.slice(0, 4), +fromIso.slice(5, 7) - 1, +fromIso.slice(8, 10));
+    for (; ; d.setDate(d.getDate() + 1)) {
+      var y = d.getFullYear(), m = d.getMonth() + 1, dd = d.getDate(), k = iso(y, m, dd);
+      if (k > toIso) break;
+      if (d.getDay() === 0 || PH[k]) continue;
+      var e = (S.months[ymOf(y, m)] || {})[pad(dd)];
+      if (!e) out.push(k);
+    }
+    return out;
+  };
+  R.yesterdayIso = function () { var t = new Date(); t.setDate(t.getDate() - 1); return iso(t.getFullYear(), t.getMonth() + 1, t.getDate()); };
+
   /* ---- time-card JSON → calendar entries ---- */
   R.normalize = function (o) {
     var num = U.num, MON3 = U.MON3;

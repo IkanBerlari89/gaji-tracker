@@ -5,7 +5,7 @@
   var LS = 'gaji-tracker-v2', LS_V1 = 'gaji-tracker-v1', LS_DIRTY = 'gaji-dirty';
   var St = {};
 
-  St.DEFAULTS = { basic: 0, basicBefore: 0, raiseFrom: '2026-01', skbbk: true, baseMode: 'day', alQuota: 8, alAsOf: '2026-01-01', alLeft: 0, startYm: '2026-01', tg: U.clone(R.DEFAULT_TG) };
+  St.DEFAULTS = { basic: 0, basicBefore: 0, raiseFrom: '2026-01', skbbk: true, baseMode: 'day', alQuota: 8, alAsOf: '2026-01-01', alLeft: 0, startYm: '2026-01', trackFrom: '', tg: U.clone(R.DEFAULT_TG) };
 
   var S = { settings: U.clone(St.DEFAULTS), months: {}, records: {}, targets: {}, meta: { stamps: {}, updatedAt: null } };
   St.S = S;

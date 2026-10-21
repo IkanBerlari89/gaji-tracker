@@ -239,6 +239,9 @@ tr.sub td{color:var(--muted)}
 .day .dl.pos{color:var(--good)}
 .day .dl.neg{color:var(--bad)}
 .day.sugg{border:1.5px dashed var(--accent);background:var(--accent-soft)}
+.day.miss{border:1.5px dashed var(--bad)}
+.day.miss .lbl{color:var(--bad)}
+.trk-nav input[type=date]{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px;font-weight:600}
 .day.sugg .lbl{color:var(--accent)}
 .tag.sg{background:var(--accent);color:var(--on-accent);font-size:8px}
 .tg-rules{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface-2)}
