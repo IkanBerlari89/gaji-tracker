@@ -3,7 +3,7 @@
 (function (G) {
   'use strict';
   var U = G.Gaji.U, PH = U.PH, SCHED = U.SCHED, LEAVES = U.LEAVES;
-  var pad = U.pad, parseYm = U.parseYm, daysIn = U.daysIn, iso = U.iso, dayType = U.dayType, tmin = U.tmin, mtime = U.mtime, r2 = U.r2, fh1 = U.fh1, ymOf = U.ymOf, today = U.today;
+  var pad = U.pad, parseYm = U.parseYm, daysIn = U.daysIn, iso = U.iso, dayType = U.dayType, tmin = U.tmin, mtime = U.mtime, r2 = U.r2, fh1 = U.fh1, ymOf = U.ymOf, today = U.today, addYm = U.addYm;
 
   var S = null;                       // bound state: { settings, months, records, targets }
   var AL = { over: {}, left: {}, used: {} };
@@ -164,6 +164,26 @@
       days[k] = { k: 'W', out: t === 'FR' ? P.fr : P.mt };
     }
     return R.money(ym, R.halves(ym, days));
+  };
+
+  /* One month ahead: days already on the calendar stay; empty future days follow plan P (null = normal hours, no OT). */
+  R.forecastMonth = function (ym, P) {
+    var p = parseYm(ym), n = daysIn(p.y, p.m), days = Object.assign({}, S.months[ym] || {}), td = today(), cur = ymOf(td.y, td.m);
+    if (P) for (var d = 1; d <= n; d++) {
+      var k = pad(d); if (days[k]) continue;
+      if (ym < cur || (ym === cur && d < td.d)) continue;
+      var t = dayType(p.y, p.m, d), ph = PH[iso(p.y, p.m, d)];
+      if (ph) { if (P.ph === 'work') days[k] = { k: 'X2' }; continue; }
+      if (t === 'SU') continue;
+      if (t === 'SA') { if (P.sa !== 'off') days[k] = { k: 'W', out: P.sa }; continue; }
+      days[k] = { k: 'W', out: t === 'FR' ? P.fr : P.mt };
+    }
+    var H = R.halves(ym, days), M = R.money(ym, H); M.H = H; M.set = Object.keys(S.months[ym] || {}).length; return M;
+  };
+  R.forecast = function (fromYm, months, P) {
+    var out = [], tot = { net: 0, gross: 0, ot: 0, ot2: 0, up: 0, ded: 0 };
+    for (var i = 0; i < months; i++) { var ym = addYm(fromYm, i), M = R.forecastMonth(ym, P); out.push({ ym: ym, M: M }); tot.net += M.net; tot.gross += M.gross; tot.ot += M.ot; tot.ot2 += M.ot2; tot.up += M.up; tot.ded += M.ded; }
+    return { months: out, total: tot };
   };
 
   /* ---- time-card JSON → calendar entries ---- */

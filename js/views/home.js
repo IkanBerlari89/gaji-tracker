@@ -32,7 +32,7 @@
       '<div class="tile"><div class="eyebrow">OT this month</div><div class="v">RM' + fm(M.o1 + M.o2 + M.x1 + M.x2) + '</div><div class="s">' + fh(M.ot) + 'h at RM' + fm(M.r.r15) + (M.ot2 ? ' + ' + fh(M.ot2) + 'h ×2' : '') + '</div></div></div>';
     h += '<div class="row"><button class="btn primary" data-go="cal" style="flex:1">' + IC().cal + 'Calendar</button><button class="btn" data-go="imp" style="flex:1">' + IC().imp + 'Import</button></div>';
     h += '</div><div class="col">';
-    h += trendCard(cp);
+    h += trendCard(UI);
     h += slipsCard();
     h += '</div></div>';
     return h;
@@ -52,16 +52,22 @@
     return h + '</section>';
   }
 
-  /* Trend: net per half (estimate vs payslip) and OT hours per half, last 8 halves. One axis each, hover tooltip. */
-  function series() {
-    var S = St.S, cp = U.currentPeriod(), out = [], ym = U.addYm(cp.ym, -4), end = cp.ym;
+  /* Trend: net and OT, by half (last 8) or by month (last 8). One axis each, hover tooltip. */
+  function series(byMonth) {
+    var S = St.S, cp = U.currentPeriod(), out = [], ym = U.addYm(cp.ym, byMonth ? -7 : -4), end = cp.ym;
     for (; ym <= end; ym = U.addYm(ym, 1)) {
-      var hasDays = !!(S.months[ym] && Object.keys(S.months[ym]).length), M = R.monthMoney(ym), H = R.halves(ym);
-      [1, 2].forEach(function (hf) {
-        if (ym === end && hf > cp.h) return;
-        var rec = S.records[ym + '-' + hf], act = rec && rec.payslip && rec.payslip.net != null ? rec.payslip.net : null;
-        out.push({ ym: ym, h: hf, key: ym + '-' + hf, est: hf === 1 ? M.half1 : M.half2, act: act, ot: H[hf].ot + H[hf].ot2, otRec: rec && rec.payslip && rec.payslip.ot15_hours != null ? rec.payslip.ot15_hours : null, hasDays: hasDays, current: ym === cp.ym && hf === cp.h });
-      });
+      var M = R.monthMoney(ym), H = R.halves(ym), r1 = S.records[ym + '-1'], r2 = S.records[ym + '-2'], q = U.parseYm(ym);
+      var n1 = r1 && r1.payslip && r1.payslip.net != null ? r1.payslip.net : null, n2 = r2 && r2.payslip && r2.payslip.net != null ? r2.payslip.net : null;
+      if (byMonth) {
+        var o1 = r1 && r1.payslip && r1.payslip.ot15_hours != null ? r1.payslip.ot15_hours : null, o2 = r2 && r2.payslip && r2.payslip.ot15_hours != null ? r2.payslip.ot15_hours : null;
+        out.push({ ym: ym, h: 0, key: ym, label: MON3[q.m - 1] + (q.m === 1 ? ' ' + String(q.y).slice(2) : ''), name: U.MONTHS[q.m - 1] + ' ' + q.y, est: M.net, act: n1 != null && n2 != null ? n1 + n2 : null, partial: (n1 != null) !== (n2 != null), ot: M.ot + M.ot2, otRec: o1 != null || o2 != null ? (o1 || 0) + (o2 || 0) : null, current: ym === cp.ym });
+      } else {
+        [1, 2].forEach(function (hf) {
+          if (ym === end && hf > cp.h) return;
+          var rec = hf === 1 ? r1 : r2, act = hf === 1 ? n1 : n2;
+          out.push({ ym: ym, h: hf, key: ym + '-' + hf, label: MON3[q.m - 1] + ' H' + hf, name: U.periodName(ym, hf), est: hf === 1 ? M.half1 : M.half2, act: act, ot: H[hf].ot + H[hf].ot2, otRec: rec && rec.payslip && rec.payslip.ot15_hours != null ? rec.payslip.ot15_hours : null, current: ym === cp.ym && hf === cp.h });
+        });
+      }
     }
     return out.slice(-8);
   }
@@ -81,21 +87,23 @@
         s += '<path d="M' + x + ' ' + y0 + ' v-' + Math.max(0, hgt - 4) + ' a4 4 0 0 1 4 -4 h' + (bw - 8) + ' a4 4 0 0 1 4 4 v' + Math.max(0, hgt - 4) + ' z" fill="var(--c' + (k + 1) + ')"' + (p.current && k === 0 ? ' opacity=".55"' : '') + '/>';
       });
       if (opt.lab(p) != null) s += '<text class="lbl" x="' + (x0 + slot / 2) + '" y="' + (y(Math.max.apply(null, vals.filter(function (v) { return v != null; }))) - 5) + '" text-anchor="middle">' + opt.lab(p) + '</text>';
-      s += '<text class="ax" x="' + (x0 + slot / 2) + '" y="' + (Hh - 8) + '" text-anchor="middle">' + MON3[U.parseYm(p.ym).m - 1] + ' H' + p.h + '</text>';
+      s += '<text class="ax" x="' + (x0 + slot / 2) + '" y="' + (Hh - 8) + '" text-anchor="middle">' + esc(p.label) + '</text>';
       s += '<rect class="hit" data-tip="' + esc(opt.tip(p)) + '" data-ym="' + p.ym + '" x="' + x0 + '" y="' + padT + '" width="' + slot + '" height="' + (Hh - padT) + '"/>';
     });
     return s + '</svg>';
   }
   function narrowScreen() { return G.innerWidth < 600; }
-  function trendCard() {
-    var pts = series(), lastAct = pts.filter(function (p) { return p.act != null; }).map(function (p) { return p.key; }).pop();
-    var h = '<section class="card"><div class="card-h"><h2>Net pay per half</h2><div class="legend"><span><i style="background:var(--c1)"></i>Estimate</span><span><i style="background:var(--c2)"></i>Payslip</span></div></div>';
-    h += '<div class="chart" data-chart="1">' + bars(pts, { label: 'Net pay per half', n: 2, vals: function (p) { return [p.est, p.act]; }, step: function (m) { return m > 3000 ? 1000 : 500; }, fmtAx: function (g) { return g ? (g / 1000) + 'k' : '0'; },
-      lab: function (p) { return p.current ? Math.round(p.est) : p.act != null && (!narrowScreen() || p.key === lastAct) ? Math.round(p.act) : null; }, tip: function (p) { return U.periodName(p.ym, p.h) + '|Estimate RM' + fm(p.est) + (p.act != null ? ' · Payslip RM' + fm(p.act) + ' (' + (p.act - p.est >= 0 ? '+' : '−') + fm(Math.abs(p.act - p.est)) + ')' : '') + (p.current ? ' · in progress' : ''); } }) + '</div>';
-    h += '<p class="tiny muted" style="margin-top:6px">The lighter bar is the half in progress. Tap a bar to open that month.</p>';
-    h += '<div class="card-h" style="margin-top:14px"><h2>OT hours per half</h2></div>';
-    h += '<div class="chart" data-chart="1">' + bars(pts, { label: 'OT hours per half', n: 1, h: 140, vals: function (p) { return [p.ot]; }, step: function (m) { return m > 20 ? 10 : 5; }, fmtAx: function (g) { return g + 'h'; },
-      lab: function (p) { return p.ot && (!narrowScreen() || p.current || p.ot === Math.max.apply(null, pts.map(function (q) { return q.ot; }))) ? U.fh1(p.ot) : null; }, tip: function (p) { return U.periodName(p.ym, p.h) + '|OT ' + fh(p.ot) + 'h' + (p.otRec != null ? ' · payslip ' + fh(p.otRec) + 'h' : ''); } }) + '</div>';
+  function trendCard(UI) {
+    var byMonth = UI.chartScope === 'month', unit = byMonth ? 'month' : 'half';
+    var pts = series(byMonth), lastAct = pts.filter(function (p) { return p.act != null; }).map(function (p) { return p.key; }).pop();
+    var seg = '<div class="seg"><button data-chart-scope="half" aria-pressed="' + !byMonth + '">Half</button><button data-chart-scope="month" aria-pressed="' + byMonth + '">Month</button></div>';
+    var h = '<section class="card"><div class="card-h"><h2>Net pay per ' + unit + '</h2>' + seg + '</div><div class="legend" style="margin-bottom:8px"><span><i style="background:var(--c1)"></i>Estimate</span><span><i style="background:var(--c2)"></i>Payslip</span></div>';
+    h += '<div class="chart" data-chart="1">' + bars(pts, { label: 'Net pay per ' + unit, n: 2, vals: function (p) { return [p.est, p.act]; }, step: function (m) { return m > 3000 ? 1000 : 500; }, fmtAx: function (g) { return g ? (g / 1000) + 'k' : '0'; },
+      lab: function (p) { return p.current ? Math.round(p.est) : p.act != null && (!narrowScreen() || p.key === lastAct) ? Math.round(p.act) : null; }, tip: function (p) { return p.name + '|Estimate RM' + fm(p.est) + (p.act != null ? ' · Payslip RM' + fm(p.act) + ' (' + (p.act - p.est >= 0 ? '+' : '−') + fm(Math.abs(p.act - p.est)) + ')' : p.partial ? ' · payslip for one half only' : '') + (p.current ? ' · in progress' : ''); } }) + '</div>';
+    h += '<p class="tiny muted" style="margin-top:6px">The lighter bar is the ' + unit + ' in progress.' + (byMonth ? ' A payslip bar needs both halves saved.' : '') + ' Tap a bar to open that month.</p>';
+    h += '<div class="card-h" style="margin-top:14px"><h2>OT hours per ' + unit + '</h2></div>';
+    h += '<div class="chart" data-chart="1">' + bars(pts, { label: 'OT hours per ' + unit, n: 1, h: 140, vals: function (p) { return [p.ot]; }, step: function (m) { return m > 40 ? 20 : m > 20 ? 10 : 5; }, fmtAx: function (g) { return g + 'h'; },
+      lab: function (p) { return p.ot && (!narrowScreen() || p.current || p.ot === Math.max.apply(null, pts.map(function (q) { return q.ot; }))) ? U.fh1(p.ot) : null; }, tip: function (p) { return p.name + '|OT ' + fh(p.ot) + 'h' + (p.otRec != null ? ' · payslip ' + fh(p.otRec) + 'h' : ''); } }) + '</div>';
     return h + '</section>';
   }
 

@@ -23,7 +23,7 @@
   var TABS = [['home', 'Home', 'home'], ['cal', 'Calendar', 'cal'], ['imp', 'Import', 'imp'], ['plan', 'Plan', 'plan'], ['more', 'More', 'more']];
 
   var t0 = U.today(), cur = U.ymOf(t0.y, t0.m);
-  var UI = Ga.UI = { tab: 'home', sub: 'rules', ym: cur, brush: 'edit', heroScope: 'half', planYm: cur,
+  var UI = Ga.UI = { tab: 'home', sub: 'rules', ym: cur, brush: 'edit', heroScope: 'half', chartScope: 'half', ahead: 3, aheadFill: 'none', planYm: cur,
     planA: { mt: '17:30', fr: '17:30', sa: '11:30', ph: 'rest' }, planB: { mt: '18:30', fr: '18:30', sa: '17:00', ph: 'rest' },
     promptYm: cur, promptHalf: t0.d <= 15 ? 1 : 2, pending: null, clearArm: false, targetOpen: false, rulesOpen: false };
 
@@ -134,6 +134,9 @@
     if (e.target.closest('label.chk,label.pill,label.drop,label.btn')) return;
     var t = e.target.closest('button,[data-day]'); if (!t) return; var ds = t.dataset, S = St.S;
     if (ds.hero) { UI.heroScope = ds.hero; Ga.render(); }
+    else if (ds.chartScope) { UI.chartScope = ds.chartScope; Ga.render(); }
+    else if (ds.ahead) { UI.ahead = +ds.ahead; Ga.render(); }
+    else if (ds.goym) { UI.ym = ds.goym; Ga.render(); window.scrollTo(0, 0); }
     else if (ds.go) Ga.go(ds.go);
     else if (ds.sub) { UI.sub = ds.sub; Ga.render(); }
     else if (ds.mon) { UI.ym = U.addYm(UI.ym, +ds.mon); UI.clearArm = false; Ga.render(); }
@@ -170,6 +173,7 @@
     var id = e.target.id, v = e.target.value;
     if (e.target.dataset.tgr || e.target.dataset.tgdow) { V.readTgRules(UI); return; }
     if (id === 'planYm') { UI.planYm = v; Ga.render(); }
+    else if (id === 'aheadFill') { UI.aheadFill = v; Ga.render(); }
     else if (/^p[ab](mt|fr|sa|ph)$/.test(id)) { (id[1] === 'a' ? UI.planA : UI.planB)[id.slice(2)] = v; Ga.render(); }
   });
 

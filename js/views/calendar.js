@@ -48,6 +48,7 @@
     h += '</div><div class="col">';
     h += V.target(UI, ym, M, tg);
     h += V.monthSummary(ym, M, H);
+    h += V.forecast(UI, ym);
     h += '<div class="row"><button class="btn danger" data-act="clearMonth">' + (UI.clearArm ? 'Tap again to clear ' + MON3[p.m - 1] : 'Clear this month') + '</button></div>';
     return h + '</div></div>';
   };
@@ -71,6 +72,22 @@
     h += '</tbody></table></div><p class="tiny muted" style="margin-top:8px">Deductions: EPF RM' + fm(M.epf) + ' · SOCSO ' + fm(M.socso) + ' · EIS ' + fm(M.eis) + ' · SKBBK ' + fm(M.skbbk) + (S.settings.skbbk ? '' : ' (off)') + '</p></section>';
     return h;
   };
+
+  /* forecast card: total for the next 1/2/3/6/12 months from the viewed month */
+  V.forecast = function (UI, ym) {
+    var n = UI.ahead || 3, fill = UI.aheadFill || 'none', P = fill === 'A' ? Ga.UI.planA : fill === 'B' ? Ga.UI.planB : null, F = R.forecast(ym, n, P), p0 = U.parseYm(ym), last = U.parseYm(U.addYm(ym, n - 1));
+    var h = '<section class="card"><div class="card-h"><div><h2>Next ' + n + ' month' + (n > 1 ? 's' : '') + '</h2><span class="small muted">' + MON3[p0.m - 1] + ' ' + p0.y + (n > 1 ? ' – ' + MON3[last.m - 1] + ' ' + last.y : '') + '</span></div><div class="seg">' + [1, 2, 3, 6, 12].map(function (k) { return '<button data-ahead="' + k + '" aria-pressed="' + (k === n) + '">' + k + '</button>'; }).join('') + '</div></div>';
+    h += '<div class="plan-res" style="margin-bottom:10px"><div class="eyebrow">Take-home total</div><div class="v">RM' + fm(F.total.net) + '</div><div class="tiny muted">OT ' + fh(F.total.ot) + 'h' + (F.total.ot2 ? ' + ' + fh(F.total.ot2) + 'h 2×' : '') + ' · gross RM' + fm(F.total.gross) + ' · deductions RM' + fm(F.total.ded) + (F.total.up ? ' · unpaid ' + F.total.up + 'd' : '') + '</div></div>';
+    h += '<div class="field" style="margin-bottom:10px"><label for="aheadFill">Days not yet on the calendar</label><select id="aheadFill"><option value="none"' + (fill === 'none' ? ' selected' : '') + '>Normal hours, no OT</option><option value="A"' + (fill === 'A' ? ' selected' : '') + '>Follow Plan A (' + planLabel(Ga.UI.planA) + ')</option><option value="B"' + (fill === 'B' ? ' selected' : '') + '>Follow Plan B (' + planLabel(Ga.UI.planB) + ')</option></select></div>';
+    if (n > 1) {
+      h += '<div class="tbl-wrap"><table><thead><tr><th>Month</th><th class="r">OT h</th><th class="r">Net</th></tr></thead><tbody>';
+      F.months.forEach(function (m) { var q = U.parseYm(m.ym); h += '<tr><td><button class="chip' + (m.ym === ym ? ' accent' : '') + '" data-goym="' + m.ym + '" style="border:0;cursor:pointer">' + MON3[q.m - 1] + ' ' + q.y + '</button>' + (m.M.set ? ' <span class="tiny muted">' + m.M.set + ' set</span>' : '') + '</td><td class="r">' + fh(m.M.ot + m.M.ot2) + '</td><td class="r">' + fm(m.M.net) + '</td></tr>'; });
+      h += '<tr class="total"><td>Total</td><td class="r">' + fh(F.total.ot + F.total.ot2) + '</td><td class="r">' + fm(F.total.net) + '</td></tr></tbody></table></div>';
+    }
+    h += '<p class="tiny muted" style="margin-top:8px">Days already on the calendar are kept as they are; past days are never changed. Plans A and B are set in the Plan tab.</p>';
+    return h + '</section>';
+  };
+  function planLabel(P) { return P.mt + (P.fr !== P.mt ? '/' + P.fr : '') + ', Sat ' + (P.sa === 'off' ? 'off' : P.sa); }
 
   /* target card */
   function rulesSel(id, val, list, label) { return '<div class="field"><label for="' + id + '">' + label + '</label><select id="' + id + '" data-tgr="1">' + list.map(function (o) { var v = o[0] || o; return '<option value="' + v + '"' + (v === val ? ' selected' : '') + '>' + (o[1] || o) + '</option>'; }).join('') + '</select></div>'; }
