@@ -63,10 +63,10 @@
     return h + '</div></div>';
   };
 
-  V.monthSummary = function (ym, M, H) {
+  V.monthSummary = function (ym, M, H, bare) {
     var S = St.S, rec1 = S.records[ym + '-1'], rec2 = S.records[ym + '-2'];
     var row = function (l, a, b, t, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + l + '</td><td class="r">' + a + '</td><td class="r">' + b + '</td><td class="r">' + t + '</td></tr>'; };
-    var h = '<section class="card"><div class="card-h"><h2>Month summary</h2><span class="chip accent">Take-home RM' + fm(M.net) + '</span></div><div class="tbl-wrap"><table><thead><tr><th></th><th class="r">1–15</th><th class="r">16–end</th><th class="r">Month</th></tr></thead><tbody>';
+    var h = (bare ? '' : '<section class="card"><div class="card-h"><h2>Month summary</h2><span class="chip accent">Take-home RM' + fm(M.net) + '</span></div>') + '<div class="tbl-wrap"><table' + (bare ? ' class="brk"' : '') + '><thead><tr><th></th><th class="r">1–15</th><th class="r">16–end</th><th class="r">Month</th></tr></thead><tbody>';
     h += row('Paid hours', fh(H[1].paid), fh(H[2].paid), fh(H[1].paid + H[2].paid), 'sub');
     h += row('OT 1.5× hours', fh(H[1].ot), fh(H[2].ot), fh(M.ot));
     h += row('OT 2× hours', fh(H[1].ot2), fh(H[2].ot2), fh(M.ot2));
@@ -79,7 +79,7 @@
     h += row('Net pay', fm(M.half1), fm(M.half2), fm(M.net), 'total');
     var tg = S.targets[ym]; if (tg && tg.sugg && Object.keys(tg.sugg).length) { var MS = R.money(ym, R.halves(ym, R.withSugg(ym))); h += row('With target days', fm(MS.half1), fm(MS.half2), fm(MS.net), 'sub'); }
     if (rec1 || rec2) { var a = rec1 && rec1.payslip && rec1.payslip.net, b = rec2 && rec2.payslip && rec2.payslip.net; h += row('Payslip', a != null ? fm(a) : '—', b != null ? fm(b) : '—', a != null && b != null ? fm(a + b) : '—', 'sub'); }
-    h += '</tbody></table></div><p class="tiny muted" style="margin-top:8px">Deductions: EPF RM' + fm(M.epf) + ' · SOCSO ' + fm(M.socso) + ' · EIS ' + fm(M.eis) + ' · SKBBK ' + fm(M.skbbk) + (S.settings.skbbk ? '' : ' (off)') + '</p></section>';
+    h += '</tbody></table></div><p class="tiny muted" style="margin-top:8px">Deductions: EPF RM' + fm(M.epf) + ' · SOCSO ' + fm(M.socso) + ' · EIS ' + fm(M.eis) + ' · SKBBK ' + fm(M.skbbk) + (S.settings.skbbk ? '' : ' (off)') + '</p>' + (bare ? '' : '</section>');
     return h;
   };
 

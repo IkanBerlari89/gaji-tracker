@@ -301,6 +301,8 @@ tr.sub td{color:var(--muted)}
 .kv.mini{font-size:12.5px;gap:4px 10px}
 .kv.mini .big{font-size:15px}
 table.brk td,table.brk th{padding:6px 5px;font-size:12.5px}
+table.brk tr.mo td{border-bottom:2px solid var(--line);background:var(--surface-2)}
+.stepper input{max-width:52px}
 
 /* more */
 .subnav{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}

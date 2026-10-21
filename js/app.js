@@ -28,9 +28,9 @@
     promptYm: cur, promptHalf: t0.d <= 15 ? 1 : 2, pending: null, clearArm: false, targetOpen: false, rulesOpen: false };
 
   /* ---- helpers shared by views ---- */
-  Ga.ymOptions = function (sel, wide) {
-    var out = '', start = wide ? '2025-01' : (St.S.settings.startYm || '2026-01'), end = U.addYm(cur, 2);
-    if (sel && sel < start) start = sel;
+  Ga.ymOptions = function (sel, wide, endYm) {
+    var out = '', start = wide ? '2025-01' : (St.S.settings.startYm || '2026-01'), end = endYm || U.addYm(cur, 2);
+    if (sel && sel < start) start = sel; if (sel && sel > end) end = sel;
     for (var ym = start; ym <= end; ym = U.addYm(ym, 1)) { var p = U.parseYm(ym); out = '<option value="' + ym + '"' + (ym === sel ? ' selected' : '') + '>' + MONTHS[p.m - 1] + ' ' + p.y + '</option>' + out; }
     return out;
   };
@@ -139,8 +139,8 @@
     else if (ds.chartScope) { UI.chartScope = ds.chartScope; Ga.render(); }
     else if (ds.ahead) { UI.ahead = +ds.ahead; Ga.render(); }
     else if (ds.goym) { UI.ym = ds.goym; if (ds.go) Ga.go(ds.go); else { Ga.render(); window.scrollTo(0, 0); } }
-    else if (ds.plstep) { UI.plN = Math.min(36, Math.max(1, UI.plN + +ds.plstep)); UI.plClearArm = false; Ga.render(); }
-    else if (ds.aheadstep) { UI.ahead = Math.min(36, Math.max(1, UI.ahead + +ds.aheadstep)); Ga.render(); }
+    else if (ds.plstep) { UI.plN = Math.min(48, Math.max(1, UI.plN + +ds.plstep)); UI.plClearArm = false; Ga.render(); }
+    else if (ds.aheadstep) { UI.ahead = Math.min(48, Math.max(1, UI.ahead + +ds.aheadstep)); Ga.render(); }
     else if (ds.act === 'plFill') { UI.plFillOpen = true; A.plFill(UI); }
     else if (ds.act === 'plClear') { UI.plFillOpen = true; if (!UI.plClearArm) { UI.plClearArm = true; Ga.render(); return; } UI.plClearArm = false; A.plClear(UI); }
     else if (ds.go) Ga.go(ds.go);
@@ -181,8 +181,8 @@
     if (id === 'planYm') { UI.planYm = v; Ga.render(); }
     else if (id === 'aheadFill') { UI.aheadFill = v; Ga.render(); }
     else if (id === 'plStart') { UI.plStart = v; Ga.render(); }
-    else if (id === 'plN') { var nn = Math.min(36, Math.max(1, Math.round(+v) || 1)); UI.plN = nn; UI.plClearArm = false; Ga.render(); }
-    else if (id === 'aheadN') { UI.ahead = Math.min(36, Math.max(1, Math.round(+v) || 1)); Ga.render(); }
+    else if (id === 'plN') { var nn = Math.min(48, Math.max(1, Math.round(+v) || 1)); UI.plN = nn; UI.plClearArm = false; Ga.render(); }
+    else if (id === 'aheadN') { UI.ahead = Math.min(48, Math.max(1, Math.round(+v) || 1)); Ga.render(); }
     else if (/^p[aAbB](mt|fr|sa|ph)$/.test(id)) { (id[1].toLowerCase() === 'a' ? UI.planA : UI.planB)[id.slice(2)] = v; if (/^p[AB]/.test(id)) UI.cmpOpen = true; else UI.plFillOpen = true; Ga.render(); }
   });
 

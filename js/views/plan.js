@@ -14,7 +14,7 @@
     var S = Ga.St.S, start = UI.plStart, n = UI.plN, F = R.forecast(start, n, null), p0 = U.parseYm(start), last = U.parseYm(U.addYm(start, n - 1)), P = UI.planA;
     var h = '<div class="stack">';
     h += '<section class="card"><div class="card-h"><div><h2>Plan ' + n + ' month' + (n > 1 ? 's' : '') + '</h2><span class="small muted">' + MONTHS[p0.m - 1] + ' ' + p0.y + (n > 1 ? ' – ' + MONTHS[last.m - 1] + ' ' + last.y : '') + '</span></div>' +
-      '<div class="row"><div class="field" style="flex:0 0 170px"><select id="plStart" aria-label="First month">' + Ga.ymOptions(start) + '</select></div>' + V.stepper('plN', n, 'plstep') + '</div></div>';
+      '<div class="row"><div class="field" style="flex:0 0 170px"><select id="plStart" aria-label="First month">' + Ga.ymOptions(start, false, '2029-12') + '</select></div>' + V.stepper('plN', n, 'plstep') + '</div></div>';
     h += '<div class="plan-res"><div class="eyebrow">Take-home total · ' + n + ' month' + (n > 1 ? 's' : '') + '</div><div class="v">RM' + fm(F.total.net) + '</div><div class="tiny muted">OT ' + fh(F.total.ot) + 'h' + (F.total.ot2 ? ' + ' + fh(F.total.ot2) + 'h 2×' : '') + ' · gross RM' + fm(F.total.gross) + ' · deductions RM' + fm(F.total.ded) + (F.total.up ? ' · unpaid ' + F.total.up + 'd' : '') + '</div></div>';
     h += V.breakdown(F, start);
     h += '<details class="tg-rules" style="margin-top:12px"' + (UI.plFillOpen ? ' open' : '') + ' id="plFillDet"><summary><b>Fill empty days</b><span class="small muted">&nbsp;· ' + planLabel(P) + '</span></summary><div class="stack" style="gap:10px;margin-top:12px">' +
@@ -26,7 +26,7 @@
     h += '<div class="grid2 plgrid">';
     F.months.forEach(function (m) {
       var q = U.parseYm(m.ym), days = S.months[m.ym] || {}, M = m.M, rec = S.records[m.ym + '-1'] || S.records[m.ym + '-2'];
-      h += '<section class="card" style="padding:10px"><div class="card-h" style="margin-bottom:6px"><div><h3 style="font-size:15px">' + MONTHS[q.m - 1] + ' ' + q.y + '</h3><span class="tiny muted">OT ' + fh(M.ot) + 'h' + (M.ot2 ? ' + ' + fh(M.ot2) + 'h 2×' : '') + (M.up ? ' · unpaid ' + M.up + 'd' : '') + ' · H1 ' + fm(M.half1) + ' · H2 ' + fm(M.half2) + '</span></div><div style="text-align:right"><span class="chip accent">RM' + fm(M.net) + '</span>' + (rec ? '<br><span class="tiny muted">payslip saved</span>' : '') + '</div></div>' + V.monthGrid(m.ym, days, null, true) + V.miniSummary(M, S, m.ym) + '<div class="row" style="margin-top:6px;justify-content:flex-end"><button class="btn ghost sm" data-goym="' + m.ym + '" data-go="cal">Open in Calendar</button></div></section>';
+      h += '<section class="card" style="padding:10px"><div class="card-h" style="margin-bottom:6px"><div><h3 style="font-size:15px">' + MONTHS[q.m - 1] + ' ' + q.y + '</h3><span class="tiny muted">OT ' + fh(M.ot) + 'h' + (M.ot2 ? ' + ' + fh(M.ot2) + 'h 2×' : '') + (M.up ? ' · unpaid ' + M.up + 'd' : '') + ' · H1 ' + fm(M.half1) + ' · H2 ' + fm(M.half2) + '</span></div><div style="text-align:right"><span class="chip accent">RM' + fm(M.net) + '</span>' + (rec ? '<br><span class="tiny muted">payslip saved</span>' : '') + '</div></div>' + V.monthGrid(m.ym, days, null, true) + '<div style="margin-top:8px">' + V.monthSummary(m.ym, M, M.H, true) + '</div>' + '<div class="row" style="margin-top:6px;justify-content:flex-end"><button class="btn ghost sm" data-goym="' + m.ym + '" data-go="cal">Open in Calendar</button></div></section>';
     });
     h += '</div>';
     h += '<p class="tiny muted">Same brushes as the Calendar: pick one, then tap days in any month. Everything you set here is the same data the Calendar and Home use.</p>';
@@ -39,11 +39,19 @@
   };
   /* How the total is built: one row per month, then the total. */
   V.breakdown = function (F, start) {
-    var h = '<div class="tbl-wrap" style="margin-top:10px"><table class="brk"><thead><tr><th>Month</th><th class="r">OT h</th><th class="r">OT RM</th><th class="r">Unpaid</th><th class="r">Deduct.</th><th class="r">Net</th></tr></thead><tbody>';
-    F.months.forEach(function (m) { var q = U.parseYm(m.ym), M = m.M, otRm = M.o1 + M.o2 + M.x1 + M.x2, up = M.u1 + M.u2; h += '<tr><td><button class="chip" data-goym="' + m.ym + '" data-go="cal" style="border:0;cursor:pointer">' + U.MON3[q.m - 1] + ' ' + String(q.y).slice(2) + '</button></td><td class="r">' + fh(M.ot + M.ot2) + '</td><td class="r">' + (otRm ? '+' + fm(otRm) : '—') + '</td><td class="r">' + (up ? '−' + fm(up) : '—') + '</td><td class="r">−' + fm(M.ded) + '</td><td class="r"><b>' + fm(M.net) + '</b></td></tr>'; });
-    var T = F.total, otRmT = 0, upT = 0; F.months.forEach(function (m) { otRmT += m.M.o1 + m.M.o2 + m.M.x1 + m.M.x2; upT += m.M.u1 + m.M.u2; });
-    h += '<tr class="total"><td>Total · ' + F.months.length + ' mo</td><td class="r">' + fh(T.ot + T.ot2) + '</td><td class="r">' + (otRmT ? '+' + fm(otRmT) : '—') + '</td><td class="r">' + (upT ? '−' + fm(upT) : '—') + '</td><td class="r">−' + fm(T.ded) + '</td><td class="r">' + fm(T.net) + '</td></tr></tbody></table></div>';
-    h += '<p class="tiny muted" style="margin-top:6px">Net = basic RM' + fm(R.rates(start).basic) + ' + OT RM − unpaid − deductions, month by month. Tap a month name to open it in the Calendar.</p>';
+    var h = '<div class="tbl-wrap" style="margin-top:10px"><table class="brk"><thead><tr><th>Period</th><th class="r">OT 1.5× h</th><th class="r">OT 2× h</th><th class="r">Basic</th><th class="r">OT RM</th><th class="r">Unpaid</th><th class="r">Earnings</th><th class="r">Deduct.</th><th class="r">Net</th></tr></thead><tbody>';
+    var T = { ot: 0, ot2: 0, basic: 0, otRm: 0, up: 0, earn: 0, ded: 0, net: 0 };
+    var row = function (lab, ot, ot2, basic, otRm, up, earn, ded, net, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + lab + '</td><td class="r">' + fh(ot) + '</td><td class="r">' + (ot2 ? fh(ot2) : '—') + '</td><td class="r">' + fm(basic) + '</td><td class="r">' + (otRm ? '+' + fm(otRm) : '—') + '</td><td class="r">' + (up ? '−' + fm(up) : '—') + '</td><td class="r">' + fm(earn) + '</td><td class="r">' + (ded ? '−' + fm(ded) : '—') + '</td><td class="r"><b>' + fm(net) + '</b></td></tr>'; };
+    F.months.forEach(function (m) {
+      var q = U.parseYm(m.ym), M = m.M, H = M.H, name = U.MON3[q.m - 1] + ' ' + String(q.y).slice(2);
+      h += row('<button class="chip accent" data-goym="' + m.ym + '" data-go="cal" style="border:0;cursor:pointer">' + name + '</button> · 1st half', H[1].ot, H[1].ot2, M.r.basic / 2, M.o1 + M.x1, M.u1, M.earn1, 0, M.half1, 'sub');
+      h += row(name + ' · 2nd half', H[2].ot, H[2].ot2, M.r.basic / 2, M.o2 + M.x2, M.u2, M.earn2, M.ded, M.half2, 'sub');
+      h += row('<b>' + U.MONTHS[q.m - 1] + ' ' + q.y + '</b>', M.ot, M.ot2, M.r.basic, M.o1 + M.o2 + M.x1 + M.x2, M.u1 + M.u2, M.gross, M.ded, M.net, 'mo');
+      T.ot += M.ot; T.ot2 += M.ot2; T.basic += M.r.basic; T.otRm += M.o1 + M.o2 + M.x1 + M.x2; T.up += M.u1 + M.u2; T.earn += M.gross; T.ded += M.ded; T.net += M.net;
+    });
+    h += row('<b>Total · ' + F.months.length + ' month' + (F.months.length > 1 ? 's' : '') + '</b>', T.ot, T.ot2, T.basic, T.otRm, T.up, T.earn, T.ded, T.net, 'total');
+    h += '</tbody></table></div>';
+    h += '<p class="tiny muted" style="margin-top:6px">Net = basic + OT RM − unpaid − deductions. The 1st half carries no deductions; all of a month\'s EPF, SOCSO, EIS' + (Ga.St.S.settings.skbbk ? ' and SKBBK' : '') + ' come off the 2nd half. Tap a month name to open it in the Calendar.</p>';
     return h;
   };
   /* Short money summary under a month grid in the planner. */
