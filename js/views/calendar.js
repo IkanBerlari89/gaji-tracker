@@ -11,25 +11,25 @@
     TIMES.forEach(function (t) { var n = U.tmin(t), sub = n === 780 ? '½ day' : n < 1050 ? 'Sat' : n === 1050 ? 'normal' : n >= 1140 ? 'NR' : 'OT'; b.push(['t:' + t, t, sub]); });
     return b;
   }
-  V.alChip = function (y) { var l = R.alLeft(y); if (l === null) return ''; return '<span class="chip ' + (l <= 0 ? 'bad' : l <= 2 ? 'amber' : 'good') + '" title="Annual leave left in ' + y + '">AL ' + y + ': ' + (l <= 0 ? '0 left' : l + ' left') + '</span>'; };
-
-  V.cal = function (UI) {
-    var S = St.S, ym = UI.ym, p = U.parseYm(ym), n = U.daysIn(p.y, p.m), days = S.months[ym] || {}, H = R.halves(ym, days), M = R.money(ym, H), tg = S.targets[ym] || null, sugg = tg && tg.sugg || null;
-    var td = U.today(), first = new Date(p.y, p.m - 1, 1).getDay(), lead = (first + 6) % 7, isCur = td.y === p.y && td.m === p.m;
-    var h = '<div class="calwrap"><div class="col">';
-    h += '<div class="cal-head"><button class="icon-btn" data-mon="-1" aria-label="Previous month">' + IC().left + '</button><div style="text-align:center"><h2>' + MONTHS[p.m - 1] + ' ' + p.y + '</h2><span class="tiny muted">Basic RM' + fm(M.r.basic) + ' · OT RM' + fm(M.r.r15) + '/h</span><div style="margin-top:4px">' + V.alChip(p.y) + (isCur ? '' : ' <button class="chip accent" data-act="calToday" style="border:0;cursor:pointer">Today</button>') + '</div></div><button class="icon-btn" data-mon="1" aria-label="Next month">' + IC().right + '</button></div>';
-    h += '<div class="brushes"><div class="brush-scroll" role="toolbar" aria-label="Brush">';
+  /* Brush toolbar (shared by Calendar and Plan). */
+  V.brushBar = function (UI, year, M) {
+    var h = '<div class="brushes"><div class="brush-scroll" role="toolbar" aria-label="Brush">';
     brushList().forEach(function (b) { h += '<button class="brush" data-brush="' + b[0] + '" aria-pressed="' + (UI.brush === b[0]) + '">' + b[1] + '<small>' + b[2] + '</small></button>'; });
     h += '<span class="brush-grp">Leave</span>';
     Object.keys(LEAVES).forEach(function (k) { h += '<button class="brush lv" data-brush="' + k + '" aria-pressed="' + (UI.brush === k) + '">' + (k === 'X2' ? '×2' : k === 'CL' ? 'Leave' : k) + '<small>' + LEAVES[k].replace('Unpaid ', '') + '</small></button>'; });
     h += '<button class="brush lv" data-brush="erase" aria-pressed="' + (UI.brush === 'erase') + '">Erase<small>clear day</small></button>';
-    h += '</div>' + (UI.brush === 'AL' && R.alLeft(p.y) !== null && R.alLeft(p.y) <= 0 ? '<div class="note warn" style="margin-top:6px">AL balance for ' + p.y + ' is 0. Any AL you add now counts as <b>unpaid</b> (−RM' + fm(M.r.unpaid) + ' a day).</div>' : '') + '</div>';
-    h += '<div class="card" style="padding:10px"><div class="cal">';
+    h += '</div>' + (UI.brush === 'AL' && R.alLeft(year) !== null && R.alLeft(year) <= 0 ? '<div class="note warn" style="margin-top:6px">AL balance for ' + year + ' is 0. Any AL you add now counts as <b>unpaid</b> (−RM' + fm(M.r.unpaid) + ' a day).</div>' : '') + '</div>';
+    return h;
+  };
+  /* One month grid (shared). Every day button carries data-ym so the Plan tab can show many months at once. */
+  V.monthGrid = function (ym, days, sugg, compact) {
+    var p = U.parseYm(ym), n = U.daysIn(p.y, p.m), td = U.today(), first = new Date(p.y, p.m - 1, 1).getDay(), lead = (first + 6) % 7, isCur = td.y === p.y && td.m === p.m;
+    var h = '<div class="cal' + (compact ? ' compact' : '') + '">';
     ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(function (d) { h += '<div class="dow' + (d === 'Sun' ? ' sun' : '') + '">' + d + '</div>'; });
     var cells = [], i;
     for (i = 0; i < lead; i++) cells.push('<div class="day pad"></div>');
     for (var d = 1; d <= n; d++) {
-      if (d === 16) {
+      if (d === 16 && !compact) {
         var rem = cells.length % 7; for (i = 0; rem && i < 7 - rem; i++) cells.push('<div class="day pad"></div>'); cells.push('<div class="half-split">2nd half · 16–' + n + '</div>');
         var lead2 = (new Date(p.y, p.m - 1, 16).getDay() + 6) % 7; for (i = 0; i < lead2; i++) cells.push('<div class="day pad"></div>');
       }
@@ -37,12 +37,22 @@
       var k = c.kind === 'early' ? 'k-early' : c.kind === 'half' ? 'k-norm' : c.kind === 'empty' ? '' : 'k-' + c.kind;
       var lbl = c.label || (c.t === 'SU' ? '' : '—');
       var rm = c.t === 'SU' && !c.ot2 ? '' : (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total));
-      cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(lbl) + '">' +
+      cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(lbl) + '">' +
         '<span class="dn">' + d + (c.ph ? IC().flag : '') + (c.real ? '<span class="real-dot" title="From time card"></span>' : '') + '</span>' +
         '<span class="lbl">' + esc(lbl) + '</span>' + (c.dlab ? '<span class="dl ' + (c.dh > 0 ? 'pos' : c.dh < 0 || c.up ? 'neg' : '') + '">' + esc(c.dlab) + '</span>' : '') + (sg ? '<span class="tag sg">TARGET</span>' : c.nr ? '<span class="tag">NR</span>' : '') +
         '<span class="rm">' + (rm === '' ? '' : 'RM' + rm) + '</span></button>');
     }
-    h += cells.join('') + '</div></div>';
+    return h + cells.join('') + '</div>';
+  };
+  V.alChip = function (y) { var l = R.alLeft(y); if (l === null) return ''; return '<span class="chip ' + (l <= 0 ? 'bad' : l <= 2 ? 'amber' : 'good') + '" title="Annual leave left in ' + y + '">AL ' + y + ': ' + (l <= 0 ? '0 left' : l + ' left') + '</span>'; };
+
+  V.cal = function (UI) {
+    var S = St.S, ym = UI.ym, p = U.parseYm(ym), n = U.daysIn(p.y, p.m), days = S.months[ym] || {}, H = R.halves(ym, days), M = R.money(ym, H), tg = S.targets[ym] || null, sugg = tg && tg.sugg || null;
+    var td = U.today(), isCur = td.y === p.y && td.m === p.m;
+    var h = '<div class="calwrap"><div class="col">';
+    h += '<div class="cal-head"><button class="icon-btn" data-mon="-1" aria-label="Previous month">' + IC().left + '</button><div style="text-align:center"><h2>' + MONTHS[p.m - 1] + ' ' + p.y + '</h2><span class="tiny muted">Basic RM' + fm(M.r.basic) + ' · OT RM' + fm(M.r.r15) + '/h</span><div style="margin-top:4px">' + V.alChip(p.y) + (isCur ? '' : ' <button class="chip accent" data-act="calToday" style="border:0;cursor:pointer">Today</button>') + '</div></div><button class="icon-btn" data-mon="1" aria-label="Next month">' + IC().right + '</button></div>';
+    h += V.brushBar(UI, p.y, M);
+    h += '<div class="card" style="padding:10px">' + V.monthGrid(ym, days, sugg) + '</div>';
     h += '<div class="legend"><span><i style="background:var(--amber-soft)"></i>OT</span><span><i style="background:var(--good-soft)"></i>2× day</span><span><i style="background:var(--blue-soft)"></i>Leave / PH</span><span><i style="background:var(--bad-soft)"></i>Unpaid / AL ✕</span><span>' + IC().flag + 'Public holiday</span><span><span class="real-dot"></span>From time card</span><span><i style="border:1.5px dashed var(--accent);background:transparent"></i>Target suggestion</span></div>';
     h += '<p class="tiny muted">Each day shows clock-out, <b style="color:var(--good)">+</b>/<b style="color:var(--bad)">−</b> hours against the normal end (17:30, Sat 11:30), and the day total in RM (base ' + (S.settings.baseMode === 'hour' ? 'by scheduled hours' : 'RM' + fm(M.r.day) + '/day') + ' + OT − unpaid). An empty weekday counts as a normal day.</p>';
     h += '</div><div class="col">';
@@ -132,9 +142,9 @@
   };
 
   /* actions */
-  A.applyBrush = function (UI, d) {
-    var S = St.S, ym = UI.ym, b = UI.brush, days = S.months[ym] || (S.months[ym] = {}), k = pad(d);
-    if (b === 'edit') { A.openDay(UI, d); return; }
+  A.applyBrush = function (UI, d, ymArg) {
+    var S = St.S, ym = ymArg || UI.ym, b = UI.brush, days = S.months[ym] || (S.months[ym] = {}), k = pad(d);
+    if (b === 'edit') { A.openDay(UI, d, ym); return; }
     if (b === 'erase') delete days[k];
     else if (b.indexOf('t:') === 0) days[k] = { k: 'W', out: b.slice(2) };
     else days[k] = { k: b };
@@ -145,8 +155,8 @@
     if (!ent) delete days[pad(d)]; else days[pad(d)] = ent;
     St.touchDay(ym, d, msg || 'Calendar ' + MON3[U.parseYm(ym).m - 1] + ' ' + d);
   };
-  A.openDay = function (UI, d) {
-    var S = St.S, ym = UI.ym, p = U.parseYm(ym), e = (S.months[ym] || {})[pad(d)], c = R.dayCalc(ym, d, e);
+  A.openDay = function (UI, d, ymArg) {
+    var S = St.S, ym = ymArg || UI.ym, p = U.parseYm(ym), e = (S.months[ym] || {})[pad(d)], c = R.dayCalc(ym, d, e);
     var val = e ? (e.k === 'W' ? 'W' : e.k) : '';
     var h = '<div class="sheet-h"><div><div class="eyebrow">' + U.DOWL[new Date(p.y, p.m - 1, d).getDay()] + (c.ph ? ' · ' + esc(c.ph) : '') + '</div><h2 id="dayT" style="font-size:20px">' + d + ' ' + MONTHS[p.m - 1] + ' ' + p.y + '</h2></div><button class="icon-btn" data-close="1" aria-label="Close">' + IC().x + '</button></div>' +
       '<div class="stack">' +

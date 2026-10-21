@@ -86,7 +86,7 @@
         var x = start + k * (bw + gap), yy = y(v), hgt = Math.max(0, y0 - yy);
         s += '<path d="M' + x + ' ' + y0 + ' v-' + Math.max(0, hgt - 4) + ' a4 4 0 0 1 4 -4 h' + (bw - 8) + ' a4 4 0 0 1 4 4 v' + Math.max(0, hgt - 4) + ' z" fill="var(--c' + (k + 1) + ')"' + (p.current && k === 0 ? ' opacity=".55"' : '') + '/>';
       });
-      if (opt.lab(p) != null) s += '<text class="lbl" x="' + (x0 + slot / 2) + '" y="' + (y(Math.max.apply(null, vals.filter(function (v) { return v != null; }))) - 5) + '" text-anchor="middle">' + opt.lab(p) + '</text>';
+      vals.forEach(function (v, k) { if (v == null) return; var x = start + k * (bw + gap) + bw / 2, vl = opt.lab(v); s += '<text class="lbl' + (ns > 1 ? ' sm' : '') + '" x="' + x + '" y="' + (y(v) - 4) + '" text-anchor="middle">' + vl + '</text>'; });
       s += '<text class="ax" x="' + (x0 + slot / 2) + '" y="' + (Hh - 8) + '" text-anchor="middle">' + esc(p.label) + '</text>';
       s += '<rect class="hit" data-tip="' + esc(opt.tip(p)) + '" data-ym="' + p.ym + '" x="' + x0 + '" y="' + padT + '" width="' + slot + '" height="' + (Hh - padT) + '"/>';
     });
@@ -95,15 +95,15 @@
   function narrowScreen() { return G.innerWidth < 600; }
   function trendCard(UI) {
     var byMonth = UI.chartScope === 'month', unit = byMonth ? 'month' : 'half';
-    var pts = series(byMonth), lastAct = pts.filter(function (p) { return p.act != null; }).map(function (p) { return p.key; }).pop();
+    var pts = series(byMonth);
     var seg = '<div class="seg"><button data-chart-scope="half" aria-pressed="' + !byMonth + '">Half</button><button data-chart-scope="month" aria-pressed="' + byMonth + '">Month</button></div>';
     var h = '<section class="card"><div class="card-h"><h2>Net pay per ' + unit + '</h2>' + seg + '</div><div class="legend" style="margin-bottom:8px"><span><i style="background:var(--c1)"></i>Estimate</span><span><i style="background:var(--c2)"></i>Payslip</span></div>';
     h += '<div class="chart" data-chart="1">' + bars(pts, { label: 'Net pay per ' + unit, n: 2, vals: function (p) { return [p.est, p.act]; }, step: function (m) { return m > 3000 ? 1000 : 500; }, fmtAx: function (g) { return g ? (g / 1000) + 'k' : '0'; },
-      lab: function (p) { return p.current ? Math.round(p.est) : p.act != null && (!narrowScreen() || p.key === lastAct) ? Math.round(p.act) : null; }, tip: function (p) { return p.name + '|Estimate RM' + fm(p.est) + (p.act != null ? ' · Payslip RM' + fm(p.act) + ' (' + (p.act - p.est >= 0 ? '+' : '−') + fm(Math.abs(p.act - p.est)) + ')' : p.partial ? ' · payslip for one half only' : '') + (p.current ? ' · in progress' : ''); } }) + '</div>';
+      lab: function (v) { return narrowScreen() ? (v / 1000).toFixed(1) + 'k' : Math.round(v); }, tip: function (p) { return p.name + '|Estimate RM' + fm(p.est) + (p.act != null ? ' · Payslip RM' + fm(p.act) + ' (' + (p.act - p.est >= 0 ? '+' : '−') + fm(Math.abs(p.act - p.est)) + ')' : p.partial ? ' · payslip for one half only' : '') + (p.current ? ' · in progress' : ''); } }) + '</div>';
     h += '<p class="tiny muted" style="margin-top:6px">The lighter bar is the ' + unit + ' in progress.' + (byMonth ? ' A payslip bar needs both halves saved.' : '') + ' Tap a bar to open that month.</p>';
     h += '<div class="card-h" style="margin-top:14px"><h2>OT hours per ' + unit + '</h2></div>';
     h += '<div class="chart" data-chart="1">' + bars(pts, { label: 'OT hours per ' + unit, n: 1, h: 140, vals: function (p) { return [p.ot]; }, step: function (m) { return m > 40 ? 20 : m > 20 ? 10 : 5; }, fmtAx: function (g) { return g + 'h'; },
-      lab: function (p) { return p.ot && (!narrowScreen() || p.current || p.ot === Math.max.apply(null, pts.map(function (q) { return q.ot; }))) ? U.fh1(p.ot) : null; }, tip: function (p) { return p.name + '|OT ' + fh(p.ot) + 'h' + (p.otRec != null ? ' · payslip ' + fh(p.otRec) + 'h' : ''); } }) + '</div>';
+      lab: function (v) { return v ? U.fh1(v) : ''; }, tip: function (p) { return p.name + '|OT ' + fh(p.ot) + 'h' + (p.otRec != null ? ' · payslip ' + fh(p.otRec) + 'h' : ''); } }) + '</div>';
     return h + '</section>';
   }
 
