@@ -20,7 +20,7 @@
     Object.keys(LEAVES).forEach(function (k) { h += '<button class="brush lv" data-brush="' + k + '" aria-pressed="' + (UI.brush === k) + '">' + (k === 'X2' ? '×2' : k === 'CL' ? 'Leave' : k) + '<small>' + LEAVES[k].replace('Unpaid ', '') + '</small></button>'; });
     h += '<button class="brush lv" data-brush="erase" aria-pressed="' + (UI.brush === 'erase') + '">Erase<small>clear day</small></button>';
     h += '</div>' + (UI.brush === 'AL' && R.alLeft(year) !== null && R.alLeft(year) <= 0 ? '<div class="note warn" style="margin-top:6px">AL balance for ' + year + ' is 0. Any AL you add now counts as <b>unpaid</b> (−RM' + fm(M.r.unpaid) + ' a day).</div>' : '') +
-      (mode === 'plan' ? '<p class="tiny muted" style="margin-top:4px">Plan mode: only days after today can be changed here. Real days are shown locked.</p>' : '<p class="tiny muted" style="margin-top:4px">Past days and today can be edited. Days after today take only AL, UPH or UPL. Imported time-card days are locked.</p>') + '</div>';
+      (mode === 'plan' ? '<p class="tiny muted" style="margin-top:4px">Plan mode: every day can be changed here, past or future. The Calendar is never touched.</p>' : '<p class="tiny muted" style="margin-top:4px">Past days and today can be edited. Days after today take only AL, UPH or UPL. Imported time-card days are locked.</p>') + '</div>';
     return h;
   };
 
@@ -40,22 +40,22 @@
       }
       var iso = U.iso(p.y, p.m, d), future = iso > todayIso, e = days[pad(d)], sg = sugg ? sugg[pad(d)] || null : null, c = R.dayCalc(ym, d, sg || e), isT = isCur && td.d === d;
       var real = !!(e && e.real), planned = !!(e && e.plan);
-      var locked = plan ? (!future || real) : (real || (future && !(e && FUTURE_OK[e.k])));
+      var locked = plan ? false : (real || (future && !(e && FUTURE_OK[e.k])));
       var k = c.kind === 'early' ? 'k-early' : c.kind === 'half' ? 'k-norm' : c.kind === 'empty' ? '' : 'k-' + c.kind, isMiss = !e && missSet[iso];
       var lbl = c.label || (c.t === 'SU' ? '' : isMiss ? '?' : future ? '' : '—');
-      if (real && e.k === 'W' && e['in']) lbl = esc(e['in']) + '–' + esc(e.out);
+      if (real && !plan && e.k === 'W' && e['in']) lbl = esc(e['in']) + '–' + esc(e.out);
       var rm = c.t === 'SU' && !c.ot2 ? '' : (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total));
-      cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (planned ? ' planned' : '') + (real ? ' real' : '') + (locked ? ' locked' : '') + (future && !plan && !e ? ' future' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(c.label || lbl) + (real ? ' (time card, locked)' : locked ? ' (locked)' : '') + '">' +
+      cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (planned ? ' planned' : '') + (real && !plan ? ' real' : '') + (locked ? ' locked' : '') + (future && !plan && !e ? ' future' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(c.label || lbl) + (real ? ' (time card, locked)' : locked ? ' (locked)' : '') + '">' +
         '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span>' +
         '<span class="lbl' + (real && e.k === 'W' && e['in'] ? ' io' : '') + '">' + lbl + '</span>' + (c.dlab ? '<span class="dl ' + (c.dh > 0 ? 'pos' : c.dh < 0 || c.up ? 'neg' : '') + '">' + esc(c.dlab) + '</span>' : '') +
-        (sg ? '<span class="tag sg">TARGET</span>' : real ? '<span class="tag lock" title="From time card">' + IC().lock + '</span>' : planned ? '<span class="tag sg">PLAN</span>' : c.nr ? '<span class="tag">NR</span>' : '') +
+        (sg ? '<span class="tag sg">TARGET</span>' : real && !plan ? '<span class="tag lock" title="From time card">' + IC().lock + '</span>' : planned ? '<span class="tag sg">PLAN</span>' : c.nr ? '<span class="tag">NR</span>' : '') +
         '<span class="rm">' + (rm === '' ? '' : 'RM' + rm) + '</span></button>');
     }
     return h + cells.join('') + '</div>';
   };
   V.alChip = function (y) { var l = R.alLeft(y); if (l === null) return ''; return '<span class="chip ' + (l <= 0 ? 'bad' : l <= 2 ? 'amber' : 'good') + '" title="Annual leave left in ' + y + '">AL ' + y + ': ' + (l <= 0 ? '0 left' : l + ' left') + '</span>'; };
   V.legend = function (plan) {
-    return '<div class="legend"><span><i style="background:var(--amber-soft)"></i>OT</span><span><i style="background:var(--good-soft)"></i>2× day</span><span><i style="background:var(--blue-soft)"></i>Leave / PH</span><span><i style="background:var(--bad-soft)"></i>Unpaid / AL ✕</span><span>' + IC().flag + 'Public holiday</span><span><i style="border-left:3px solid var(--good);background:var(--surface)"></i>Time card (locked)</span>' + (plan ? '<span><i style="border:1.5px dashed var(--accent);background:transparent"></i>Planned</span><span><i style="border:1.5px dashed var(--accent);background:var(--accent-soft)"></i>Target</span>' : '<span><i style="background:var(--surface);opacity:.5"></i>Future (locked)</span>') + '<span><i style="border:1.5px dashed var(--bad);background:transparent"></i>Not filled yet</span></div>';
+    return '<div class="legend"><span><i style="background:var(--amber-soft)"></i>OT</span><span><i style="background:var(--good-soft)"></i>2× day</span><span><i style="background:var(--blue-soft)"></i>Leave / PH</span><span><i style="background:var(--bad-soft)"></i>Unpaid / AL ✕</span><span>' + IC().flag + 'Public holiday</span>' + (plan ? '<span><i style="border:1.5px dashed var(--accent);background:transparent"></i>Planned (overrides the real day)</span><span><i style="border:1.5px dashed var(--accent);background:var(--accent-soft)"></i>Target</span>' : '<span><i style="border-left:3px solid var(--good);background:var(--surface)"></i>Time card (locked)</span><span><i style="background:var(--surface);opacity:.5"></i>Future (locked)</span>') + '<span><i style="border:1.5px dashed var(--bad);background:transparent"></i>Not filled yet</span></div>';
   };
 
   V.cal = function (UI) {

@@ -120,7 +120,7 @@
     var startD = Rl.from === 'month' ? 1 : (ym < cur ? 99 : ym === cur ? td.d + 1 : 1), wk = [], sa = [], rest = [];
     for (var d = startD; d <= n; d++) {
       var k = pad(d), t = dayType(p.y, p.m, d), ph = PH[iso(p.y, p.m, d)], e = base[k], dow = new Date(p.y, p.m - 1, d).getDay();
-      if (e && (e.real || !(Rl.extend && e.k === 'W' && !ph && t !== 'SU'))) continue;
+      if (e && !(Rl.extend && e.k === 'W' && !ph && t !== 'SU')) continue;
       if (ph) { if (Rl.ph) rest.push({ k: k, steps: ['X2'], ph: 1 }); continue; }
       if (t === 'SU') { if (Rl.sun) rest.push({ k: k, steps: ['X2'] }); continue; }
       if (t !== 'SA' && Rl.dow.indexOf(dow) < 0) continue;
@@ -180,10 +180,10 @@
     return days;
   };
   R.assumedMoney = function (ym, assume) { var H = R.halves(ym, R.assumedDays(ym, assume)), M = R.money(ym, H); M.H = H; return M; };
-  /* Plan scenario view of a month: real days win; planned days only count after today. */
+  /* Plan scenario view of a month: a planned day overrides the real one; otherwise the real day shows. Any date can be planned. */
   R.planDays = function (ym) {
-    var p = parseYm(ym), n = daysIn(p.y, p.m), real = S.months[ym] || {}, pl = (S.plans && S.plans.days[ym]) || {}, t0 = R.todayIso(), out = {};
-    for (var d = 1; d <= n; d++) { var k = pad(d); if (real[k]) out[k] = real[k]; else if (pl[k] && iso(p.y, p.m, d) > t0) out[k] = pl[k]; }
+    var p = parseYm(ym), n = daysIn(p.y, p.m), real = S.months[ym] || {}, pl = (S.plans && S.plans.days[ym]) || {}, out = {};
+    for (var d = 1; d <= n; d++) { var k = pad(d); if (pl[k]) out[k] = pl[k]; else if (real[k]) out[k] = real[k]; }
     return out;
   };
   /* One month ahead in the plan: real + planned days stay; remaining empty days after today follow pattern P (null = normal hours, no OT). */

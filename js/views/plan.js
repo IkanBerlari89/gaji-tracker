@@ -24,7 +24,7 @@
     h += '<details class="tg-rules" style="margin-top:12px"' + (UI.plFillOpen ? ' open' : '') + ' id="plFillDet"><summary><b>Fill empty days</b><span class="small muted">&nbsp;· ' + planLabel(P) + '</span></summary><div class="stack" style="gap:10px;margin-top:12px">' +
       '<div class="row"><div class="field"><label for="pamt">Mon–Thu out</label>' + planSel('pamt', P.mt) + '</div><div class="field"><label for="pafr">Friday out</label>' + planSel('pafr', P.fr) + '</div><div class="field"><label for="pasa">Saturday out</label>' + planSel('pasa', P.sa, 1) + '</div><div class="field"><label for="paph">Public holiday</label><select id="paph"><option value="rest"' + (P.ph === 'rest' ? ' selected' : '') + '>Rest</option><option value="work"' + (P.ph === 'work' ? ' selected' : '') + '>Work (2×)</option></select></div></div>' +
       '<div class="row"><button class="btn primary" data-act="plFill">Fill empty days in these ' + n + ' month' + (n > 1 ? 's' : '') + '</button><button class="btn danger" data-act="plClear">' + (UI.plClearArm ? 'Tap again to remove planned days' : 'Remove planned days') + '</button></div>' +
-      '<p class="tiny muted">Fill only touches days after today that have nothing on the Calendar and nothing planned yet. Remove clears every planned day in this range. The Calendar is never changed from here.</p></div></details>';
+      '<p class="tiny muted">Fill touches days in this range that have nothing on the Calendar and nothing planned yet. Remove clears every planned day in this range, so the months fall back to the Calendar. The Calendar is never changed from here.</p></div></details>';
     h += V.target(UI);
     h += '</section>';
     h += V.brushBar(UI, p0.y, F.months[0].M, 'plan');
@@ -34,7 +34,7 @@
       h += '<section class="card" style="padding:10px"><div class="card-h" style="margin-bottom:6px"><div><h3 style="font-size:15px">' + MONTHS[q.m - 1] + ' ' + q.y + '</h3><span class="tiny muted">OT ' + fh(M.ot) + 'h' + (M.ot2 ? ' + ' + fh(M.ot2) + 'h 2×' : '') + (M.up ? ' · unpaid ' + M.up + 'd' : '') + ' · H1 ' + fm(M.half1) + ' · H2 ' + fm(M.half2) + '</span></div><div style="text-align:right"><span class="chip accent">RM' + fm(M.net) + '</span>' + (rec ? '<br><span class="tiny muted">payslip saved</span>' : '') + '</div></div>' + V.monthGrid(m.ym, R.planDays(m.ym), { compact: true, mode: 'plan', sugg: sugg }) + '<div style="margin-top:8px">' + V.monthSummary(m.ym, M, M.H, true) + '</div>' + '<div class="row" style="margin-top:6px;justify-content:flex-end"><button class="btn ghost sm" data-goym="' + m.ym + '" data-go="cal">Open in Calendar</button></div></section>';
     });
     h += '</div>' + V.legend(true);
-    h += '<p class="tiny muted">Pick a brush, then tap days after today in any month. Locked days are real (past, today, or from a time card) and come from the Calendar.</p>';
+    h += '<p class="tiny muted">Pick a brush, then tap any day in any month, past or future. A planned day overrides the real one here only; the Calendar keeps the real data.</p>';
     h += '<details class="card"' + (UI.cmpOpen ? ' open' : '') + ' id="cmpDet"><summary style="cursor:pointer;font-weight:600">Compare two patterns for one month</summary><div style="margin-top:12px">' + compare(UI) + '</div></details>';
     return h + '</div>';
   };
@@ -76,7 +76,7 @@
   }
   V.readTgRules = function (UI) {
     var Rl = St.S.settings.tg, g = function (id) { return document.getElementById(id); };
-    Rl.wkMax = g('tgWk').value; Rl.frMax = g('tgFr').value; Rl.satMax = g('tgSat').value; Rl.satOn = g('tgSatOn').checked; Rl.sun = g('tgSun').checked; Rl.ph = g('tgPh').checked; Rl.extend = g('tgExt').checked; Rl.prio = g('tgPrio').value; Rl.from = 'today';
+    Rl.wkMax = g('tgWk').value; Rl.frMax = g('tgFr').value; Rl.satMax = g('tgSat').value; Rl.satOn = g('tgSatOn').checked; Rl.sun = g('tgSun').checked; Rl.ph = g('tgPh').checked; Rl.extend = g('tgExt').checked; Rl.prio = g('tgPrio').value; Rl.from = 'month';
     Rl.dow = [].slice.call(document.querySelectorAll('[data-tgdow]')).filter(function (x) { return x.checked; }).map(function (x) { return +x.dataset.tgdow; });
     var ym = UI.plTgYm, tg = St.S.targets[ym], paths = ['settings'];
     if (tg && tg.target) { var res = R.suggest(ym, tg.target, null, R.planDays(ym)); tg.sugg = res.sugg; tg.res = res; paths.push('targets/' + ym); }
@@ -98,7 +98,7 @@
           (Rs.reached ? '' : '<div class="small" style="color:var(--bad);margin-top:4px">RM' + fm(tg.target) + ' is out of reach with these rules. Short by RM' + fm(tg.target - Rs.net) + '. Loosen a rule, for example a later weekday time.</div>') + '</div>' +
           '<div class="row"><button class="btn primary" data-act="tgApply" style="flex:1"' + (n ? '' : ' disabled') + '>Add to plan</button><button class="btn" data-act="tgClear">Clear target</button></div>';
       }
-      h += '<p class="tiny muted">Real days, leave and days already planned are never changed. Suggestions update when you change a rule.</p>';
+      h += '<p class="tiny muted">Leave, unpaid and days already set are never changed unless the rule says to extend them. Suggestions update when you change a rule.</p>';
     }
     return h + '</div></details>';
   };
@@ -127,17 +127,15 @@
     if (!Object.keys(days).length) delete S.plans.days[ym];
   };
   A.planBrush = function (UI, d, ym) {
-    var S = St.S, b = UI.brush, real = (S.months[ym] || {})[pad(d)];
-    if (!A.isFuture(ym, d)) { Ga.toast('That day is real. Edit it in the Calendar.'); return; }
-    if (real) { Ga.toast('That day is already set on the Calendar (' + (real.k === 'W' ? 'out ' + real.out : U.LEAVES[real.k] || real.k) + '). Change it there.'); return; }
+    var b = UI.brush;
     if (b === 'edit') { A.openPlanDay(UI, d, ym); return; }
     var ent = b === 'erase' ? null : b.indexOf('t:') === 0 ? { k: 'W', out: b.slice(2) } : { k: b };
     A.setPlanDay(ym, d, ent); St.touch('plans/' + ym + '/' + pad(d), 'Plan ' + MON3[U.parseYm(ym).m - 1] + ' ' + d); Ga.render();
   };
   A.openPlanDay = function (UI, d, ym) {
-    var S = St.S, p = U.parseYm(ym), e = (S.plans.days[ym] || {})[pad(d)], c = R.dayCalc(ym, d, e), val = e ? (e.k === 'W' ? 'W' : e.k) : '', LEAVES = U.LEAVES;
+    var S = St.S, p = U.parseYm(ym), pe = (S.plans.days[ym] || {})[pad(d)], re = (S.months[ym] || {})[pad(d)], e = pe || re, c = R.dayCalc(ym, d, e), val = e ? (e.k === 'W' ? 'W' : e.k) : '', LEAVES = U.LEAVES;
     var h = '<div class="sheet-h"><div><div class="eyebrow">Plan · ' + U.DOWL[new Date(p.y, p.m - 1, d).getDay()] + (c.ph ? ' · ' + c.ph : '') + '</div><h2 id="dayT" style="font-size:20px">' + d + ' ' + MONTHS[p.m - 1] + ' ' + p.y + '</h2></div><button class="icon-btn" data-close="1" aria-label="Close">' + Ga.IC.x + '</button></div><div class="stack">' +
-      '<div class="row"><div class="field"><label for="dType">Planned day</label><select id="dType"><option value="">Nothing planned · normal day</option><option value="W"' + (val === 'W' ? ' selected' : '') + '>Worked · clock-out time</option>' + Object.keys(LEAVES).map(function (k) { return '<option value="' + k + '"' + (val === k ? ' selected' : '') + '>' + LEAVES[k] + '</option>'; }).join('') + '</select></div>' +
+      '<div class="row"><div class="field"><label for="dType">Planned day</label><select id="dType"><option value="">' + (re ? 'Same as the Calendar (' + (re.k === 'W' ? 'out ' + re.out : LEAVES[re.k] || re.k) + ')' : 'Nothing planned · normal day') + '</option><option value="W"' + (val === 'W' ? ' selected' : '') + '>Worked · clock-out time</option>' + Object.keys(LEAVES).map(function (k) { return '<option value="' + k + '"' + (val === k ? ' selected' : '') + '>' + LEAVES[k] + '</option>'; }).join('') + '</select></div>' +
       '<div class="field" style="max-width:150px"><label for="dOut">Clock out</label><input id="dOut" type="time" value="' + (e && e.out || (c.t === 'SA' ? '13:00' : '18:30')) + '"></div></div>' +
       '<div class="quick" id="dQuick">' + (c.t === 'SA' ? ['11:30', '12:30', '13:00', '15:00', '16:30', '17:00'] : ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30']).map(function (x) { return '<button type="button" data-q="' + x + '">' + x + '</button>'; }).join('') + '</div>' +
       '<dl class="kv" id="dRes"></dl><div class="row"><button class="btn primary" id="dSave" style="flex:1">Save to plan</button><button class="btn" id="dClear">Clear</button></div></div>';
@@ -159,7 +157,7 @@
     monthsInRange(UI).forEach(function (ym) {
       var p = U.parseYm(ym), real = S.months[ym] || {}, pl = S.plans.days[ym] || {};
       for (var d = 1; d <= U.daysIn(p.y, p.m); d++) {
-        var k = pad(d); if (real[k] || pl[k] || !A.isFuture(ym, d)) continue;
+        var k = pad(d); if (real[k] || pl[k]) continue;
         var t = U.dayType(p.y, p.m, d), ph = U.PH[U.iso(p.y, p.m, d)], ent = null;
         if (ph) { if (P.ph === 'work') ent = { k: 'X2' }; }
         else if (t === 'SU') ent = null;
@@ -168,7 +166,7 @@
         if (ent) { A.setPlanDay(ym, d, ent); paths.push('plans/' + ym + '/' + k); count++; }
       }
     });
-    if (!count) { Ga.toast('No empty days ahead to fill'); return; }
+    if (!count) { Ga.toast('No empty days to fill'); return; }
     St.touch(paths, 'Plan: fill ' + count + ' days'); Ga.render(); Ga.toast(count + ' days planned');
   };
   A.plClear = function (UI) {

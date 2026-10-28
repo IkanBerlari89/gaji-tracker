@@ -16,18 +16,18 @@ t('assumed days never touch real entries or the past', function () {
   var s = state(); s.months['2027-01'] = { '04': { k: 'AL' } }; var days = R.assumedDays('2027-01', { wk: '18:30', sa: '13:00' });
   assert.equal(days['04'].k, 'AL'); assert.ok(!R.assumedDays('2026-01', { wk: '18:30', sa: '13:00' })['05'], 'past month untouched');
 });
-t('plan days: real wins, planned counts only after today', function () {
-  var s = state(); s.months['2027-02'] = { '01': { k: 'AL' } }; s.plans = { days: { '2027-02': { '01': { k: 'W', out: '19:00', plan: 1 }, '02': { k: 'W', out: '18:30', plan: 1 } } } };
-  var d = R.planDays('2027-02'); assert.equal(d['01'].k, 'AL'); assert.equal(d['02'].out, '18:30');
-  s.plans = { days: { '2026-01': { '05': { k: 'W', out: '19:00', plan: 1 } } } }; assert.ok(!R.planDays('2026-01')['05'], 'past plan ignored');
+t('plan days: a planned day overrides the real one, any date', function () {
+  var s = state(); s.months['2027-02'] = { '01': { k: 'AL' }, '03': { k: 'W', out: '17:30', real: 1 } }; s.plans = { days: { '2027-02': { '01': { k: 'W', out: '19:00', plan: 1 }, '02': { k: 'W', out: '18:30', plan: 1 } } } };
+  var d = R.planDays('2027-02'); assert.equal(d['01'].out, '19:00'); assert.equal(d['02'].out, '18:30'); assert.equal(d['03'].out, '17:30');
+  s.plans = { days: { '2026-01': { '05': { k: 'W', out: '19:00', plan: 1 } } } }; assert.equal(R.planDays('2026-01')['05'].out, '19:00', 'past can be planned too');
 });
 t('forecastMonth uses the plan overlay and fills only empty future days', function () {
   var s = state(); s.plans = { days: { '2027-03': { '01': { k: 'W', out: '20:00', plan: 1 } } } };
   var M = R.forecastMonth('2027-03', { mt: '17:30', fr: '17:30', sa: 'off', ph: 'rest' }); near(M.ot, 2.5);
 });
-t('suggest with a plan base skips real days', function () {
+t('suggest with a plan base reaches the target', function () {
   var s = state(); s.months['2027-04'] = { '05': { k: 'W', out: '17:30', real: 1 } };
-  var res = R.suggest('2027-04', 4000, Object.assign({}, R.DEFAULT_TG, { from: 'month', extend: true }), R.planDays('2027-04'));
-  assert.ok(!res.sugg['05'], 'real day not extended'); assert.ok(res.reached);
+  var res = R.suggest('2027-04', 4000, Object.assign({}, R.DEFAULT_TG, { from: 'month' }), R.planDays('2027-04'));
+  assert.ok(res.reached); assert.ok(!res.sugg['05'], 'set day untouched without extend');
 });
 console.log('\n' + (n - fails) + '/' + n + ' passed'); process.exit(fails ? 1 : 0);
