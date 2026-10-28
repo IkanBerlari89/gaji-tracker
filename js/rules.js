@@ -39,6 +39,9 @@
   R.monthSched = function (ym) { var p = parseYm(ym), s = 0; for (var d = 1; d <= daysIn(p.y, p.m); d++) s += SCHED[dayType(p.y, p.m, d)]; return s; };
   R.baseShare = function (ym, t) { var r = R.rates(ym); if (t === 'SU') return 0; return S.settings.baseMode === 'hour' ? r.basic / R.monthSched(ym) * SCHED[t] : r.day; };
 
+  /* Unpaid leave is charged per calendar day: a weekday is 1 day, a Saturday ½ day, a Sunday nothing (Sep 2026 payslip: Sat + Mon + Tue = 2.50 days). */
+  R.unpaidWeight = function (t) { return t === 'SU' ? 0 : t === 'SA' ? 0.5 : 1; };
+
   /* ---- one day ---- */
   R.dayCalc = function (ym, d, e) {
     var p = parseYm(ym), t = dayType(p.y, p.m, d), ph = PH[iso(p.y, p.m, d)] || null, r = R.rates(ym);
@@ -49,9 +52,9 @@
       else { var o = R.fromOut(t, e.out); c.ot = o.ot; c.paid = o.paid; c.label = o.label; c.kind = o.kind; c.nr = !!o.nr; c.early = !!o.early; c.est = !!o.est; c.half = !!o.half; }
     }
     else if (e.k === 'X2') { c.ot2 = 8; c.paid = 16; c.label = ph ? 'PH ×2' : 'Work ×2'; c.kind = 'x2'; }
-    else if (e.k === 'UPH') { c.up = 0.5; c.label = '½ unpaid'; c.kind = 'unpaid'; c.paid = 4.5; }
-    else if (e.k === 'UPL') { c.up = 1; c.label = 'Unpaid'; c.kind = 'unpaid'; c.paid = 0; }
-    else if (e.k === 'AL' && AL.over[iso(p.y, p.m, d)]) { c.up = 1; c.over = true; c.label = 'AL ✕'; c.kind = 'unpaid'; c.paid = 0; }
+    else if (e.k === 'UPH') { c.up = Math.min(0.5, R.unpaidWeight(t)); c.label = '½ unpaid'; c.kind = 'unpaid'; c.paid = t === 'SA' ? 0 : 4.5; }
+    else if (e.k === 'UPL') { c.up = R.unpaidWeight(t); c.label = 'Unpaid'; c.kind = 'unpaid'; c.paid = 0; }
+    else if (e.k === 'AL' && AL.over[iso(p.y, p.m, d)]) { c.up = R.unpaidWeight(t); c.over = true; c.label = 'AL ✕'; c.kind = 'unpaid'; c.paid = 0; }
     else if (LEAVES[e.k]) { c.label = e.k === 'CL' ? 'Leave' : e.k; c.kind = e.k === 'OFF' ? 'empty' : 'leave'; c.paid = 0; }
     if (e && e.real && typeof e.paid === 'number') c.paid = e.paid;
     if (c.remark && /NR/i.test(c.remark)) c.nr = true;
@@ -68,6 +71,7 @@
     }
     else if (c.ot2) { c.dh = c.ot2; c.dlab = '+' + c.ot2 + 'h ×2'; }
     else if (c.up) { c.dh = null; c.dlab = c.up === 1 ? '−1 day' : '−½ day'; }
+    else if (e && (e.k === 'UPL' || c.over) && !c.up) { c.dlab = 'no deduction'; }
     c.otAmt = c.ot * r.r15; c.x2Amt = c.ot2 * r.r20; c.upAmt = c.up * r.unpaid;
     c.total = c.base + c.otAmt + c.x2Amt - c.upAmt;
     return c;
@@ -99,10 +103,12 @@
     list.sort();
     var y0 = +String(st.alAsOf || '').slice(0, 4);
     list.forEach(function (d) {
-      var y = +d.slice(0, 4); used[y] = (used[y] || 0) + 1;
+      var y = +d.slice(0, 4), w = R.unpaidWeight(dayType(y, +d.slice(5, 7), +d.slice(8, 10)));
+      if (!w) return;                                   // AL written on a Sunday is only a remark
+      used[y] = (used[y] || 0) + w;
       if (d < st.alAsOf) return;
       if (left[y] == null) left[y] = y === y0 ? +st.alLeft : +st.alQuota;
-      if (left[y] > 0) left[y]--; else over[d] = 1;
+      if (left[y] >= w) left[y] -= w; else over[d] = 1;
     });
     AL = { over: over, left: left, used: used };
     return AL;

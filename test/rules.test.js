@@ -87,5 +87,19 @@ t('suggest reaches target within rules', function () {
   var s = state(); var res = R.suggest('2026-12', 4500, Object.assign({}, R.DEFAULT_TG, { from: 'month' }));
   assert.ok(res.reached, 'reached'); assert.ok(res.net >= 4500); assert.ok(res.count > 0);
 });
+t('Sep 2026 tie-out from the real time cards: H1 2,045.04 · H2 1,371.77 (SKBBK off, AL balance 0 from 1 Sep)', function () {
+  var s = state({ skbbk: false, alAsOf: '2026-09-01', alLeft: 0 });
+  s.months['2026-09'] = { '01': { k: 'W', out: '18:32' }, '02': { k: 'W', out: '18:01' }, '03': { k: 'W', out: '18:01' }, '04': { k: 'W', out: '18:00' }, '05': { k: 'W', out: '13:00' },
+    '07': { k: 'W', out: '18:00' }, '08': { k: 'W', out: '18:04' }, '09': { k: 'W', out: '18:01' }, '10': { k: 'W', out: '18:00' }, '11': { k: 'W', out: '18:02' }, '12': { k: 'W', out: '13:01' }, '14': { k: 'W', out: '17:30' }, '15': { k: 'UPL' },
+    '17': { k: 'W', out: '18:00' }, '18': { k: 'W', out: '18:00' }, '19': { k: 'W', out: '13:01' }, '21': { k: 'W', out: '18:01' }, '22': { k: 'W', out: '18:01' }, '23': { k: 'W', out: '18:02' }, '24': { k: 'W', out: '18:01' }, '25': { k: 'W', out: '17:47' },
+    '26': { k: 'AL' }, '27': { k: 'AL' }, '28': { k: 'AL' }, '29': { k: 'AL' }, '30': { k: 'W', out: '18:30' } };
+  R.computeAL(); var H = R.halves('2026-09'), M = R.money('2026-09', H);
+  near(H[1].ot, 8); near(H[2].ot, 5.5); near(H[1].up, 1); near(H[2].up, 2.5);
+  near(M.u1, 130); near(M.u2, 325); near(M.epf, 381); near(M.socso, 19.25); near(M.eis, 7.70); near(M.skbbk, 0);
+  near(M.half1, 2045.04); near(M.half2, 1371.77);
+});
+t('unpaid weights: weekday 1, Saturday ½, Sunday 0', function () {
+  state(); near(R.dayCalc('2026-09', 26, { k: 'UPL' }).up, 0.5); near(R.dayCalc('2026-09', 27, { k: 'UPL' }).up, 0); near(R.dayCalc('2026-09', 28, { k: 'UPL' }).up, 1);
+});
 console.log('\n' + (n - fails) + '/' + n + ' passed');
 process.exit(fails ? 1 : 0);
