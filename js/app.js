@@ -18,12 +18,13 @@
     copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
     file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>',
     flag: '<svg class="flag" viewBox="0 0 24 24" fill="currentColor"><path d="M5 21V4h11l-1.5 3.5L16 11H7v10z"/></svg>',
-    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>'
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
   };
   var TABS = [['home', 'Home', 'home'], ['cal', 'Calendar', 'cal'], ['imp', 'Import', 'imp'], ['plan', 'Plan', 'plan'], ['more', 'More', 'more']];
 
   var t0 = U.today(), cur = U.ymOf(t0.y, t0.m);
-  var UI = Ga.UI = { tab: 'home', sub: 'rules', ym: cur, brush: 'edit', heroScope: 'half', chartScope: 'half', otScope: 'half', trackDate: null, trkType: null, trkOut: null, ahead: 3, aheadFill: 'none', plStart: cur, plN: 3, plFillOpen: false, plClearArm: false, cmpOpen: false, planYm: cur,
+  var UI = Ga.UI = { tab: 'home', sub: 'rules', ym: cur, brush: 'edit', heroScope: 'half', chartScope: 'half', otScope: 'half', trackDate: null, trkType: null, trkOut: null, plStart: cur, plN: 3, plTgYm: cur, plFillOpen: false, plClearArm: false, cmpOpen: false, planYm: cur,
     planA: { mt: '17:30', fr: '17:30', sa: '11:30', ph: 'rest' }, planB: { mt: '18:30', fr: '18:30', sa: '17:00', ph: 'rest' },
     promptYm: cur, promptHalf: t0.d <= 15 ? 1 : 2, pending: null, clearArm: false, targetOpen: false, rulesOpen: false };
 
@@ -87,6 +88,7 @@
   A.shiftIso = function (s, k) { var p = A.parseIso(s), d = new Date(p.y, p.m - 1, p.d + k); return U.iso(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
   A.trkSave = function (UI) {
     var S = St.S, p = A.parseIso(UI.trackDate), e = (S.months[p.ym] || {})[U.pad(p.d)], ty = U.dayType(p.y, p.m, p.d);
+    if (e && e.real) { Ga.toast('From the time card · locked'); return; }
     var type = UI.trkType != null ? UI.trkType : (e ? (e.k === 'W' ? 'W' : e.k) : ''), out = UI.trkOut || (e && e.out) || (ty === 'SA' ? '13:00' : '18:00'), ent;
     if (type === '') ent = null; else if (type === 'W') ent = Object.assign({}, e && e.real && e.k === 'W' && e.out === out ? e : {}, { k: 'W', out: out }); else ent = Object.assign({}, e && e.real && e.k === type ? e : {}, { k: type });
     A.setDay(p.ym, p.d, ent, 'Tracker ' + UI.trackDate + ' ' + (ent ? (ent.out || ent.k) : 'clear'));
@@ -146,6 +148,7 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') Ga.closeLayer(); });
   document.getElementById('main').addEventListener('click', function (e) {
     if (e.target.closest('summary') && e.target.closest('#tgDet')) { UI.rulesOpen = !document.getElementById('tgDet').open; return; }
+    if (e.target.closest('summary') && e.target.closest('#tgOuter')) { UI.targetOpen = !document.getElementById('tgOuter').open; return; }
     if (e.target.closest('summary') && e.target.closest('#plFillDet')) { UI.plFillOpen = !document.getElementById('plFillDet').open; return; }
     if (e.target.closest('summary') && e.target.closest('#cmpDet')) { UI.cmpOpen = !document.getElementById('cmpDet').open; return; }
     if (e.target.closest('label.chk,label.pill,label.drop,label.btn')) return;
@@ -153,22 +156,20 @@
     if (ds.hero) { UI.heroScope = ds.hero; Ga.render(); }
     else if (ds.chartScope) { UI.chartScope = ds.chartScope; Ga.render(); }
     else if (ds.otScope) { UI.otScope = ds.otScope; Ga.render(); }
-    else if (ds.trk) { var t1 = U.today(); UI.trackDate = ds.trk === 'today' ? U.iso(t1.y, t1.m, t1.d) : A.shiftIso(UI.trackDate, +ds.trk); UI.trkType = null; UI.trkOut = null; Ga.render(); }
+    else if (ds.trk) { var t1 = U.today(), tI = U.iso(t1.y, t1.m, t1.d), nd = ds.trk === 'today' ? tI : A.shiftIso(UI.trackDate, +ds.trk); if (nd > tI) { Ga.toast('The tracker stops at today. Use Plan for days ahead.'); return; } UI.trackDate = nd; UI.trkType = null; UI.trkOut = null; Ga.render(); }
     else if (ds.jump) { UI.trackDate = ds.jump; UI.trkType = null; UI.trkOut = null; Ga.go('home'); }
     else if (ds.trkq != null) { var q = ds.trkq; if (q.indexOf('t:') === 0) { UI.trkType = 'W'; UI.trkOut = q.slice(2); } else UI.trkType = q; Ga.render(); }
     else if (ds.act === 'trkSave') A.trkSave(UI);
     else if (ds.act === 'trkClear') { var pc = A.parseIso(UI.trackDate); A.setDay(pc.ym, pc.d, null, 'Tracker clear ' + UI.trackDate); UI.trkType = null; UI.trkOut = null; Ga.render(); Ga.toast('Cleared ' + pc.d + ' ' + U.MON3[pc.m - 1]); }
-    else if (ds.ahead) { UI.ahead = +ds.ahead; Ga.render(); }
     else if (ds.goym) { UI.ym = ds.goym; if (ds.go) Ga.go(ds.go); else { Ga.render(); window.scrollTo(0, 0); } }
     else if (ds.plstep) { UI.plN = Math.min(48, Math.max(1, UI.plN + +ds.plstep)); UI.plClearArm = false; Ga.render(); }
-    else if (ds.aheadstep) { UI.ahead = Math.min(48, Math.max(1, UI.ahead + +ds.aheadstep)); Ga.render(); }
     else if (ds.act === 'plFill') { UI.plFillOpen = true; A.plFill(UI); }
     else if (ds.act === 'plClear') { UI.plFillOpen = true; if (!UI.plClearArm) { UI.plClearArm = true; Ga.render(); return; } UI.plClearArm = false; A.plClear(UI); }
     else if (ds.go) Ga.go(ds.go);
     else if (ds.sub) { UI.sub = ds.sub; Ga.render(); }
     else if (ds.mon) { UI.ym = U.addYm(UI.ym, +ds.mon); UI.clearArm = false; Ga.render(); }
     else if (ds.brush) { UI.brush = ds.brush; Ga.render(); }
-    else if (ds.day) A.applyBrush(UI, +ds.day, ds.ym);
+    else if (ds.day) { if (UI.tab === 'plan') A.planBrush(UI, +ds.day, ds.ym); else A.applyBrush(UI, +ds.day, ds.ym); }
     else if (ds.slip) A.openSlip(ds.slip);
     else if (ds.imp) A.openPastImport(UI, ds.imp);
     else if (ds.restore) A.restoreVersion(ds.restore, t);
@@ -179,14 +180,14 @@
     else if (ds.today != null) { var td = U.today(), v = ds.today, ent = v === '' ? null : v.indexOf('t:') === 0 ? { k: 'W', out: v.slice(2) } : { k: v }; var old = (S.months[UI.ym] || {})[U.pad(td.d)]; if (ent && old && old.real) ent = Object.assign({}, old, ent); A.setDay(U.ymOf(td.y, td.m), td.d, ent, 'Today ' + (ent ? (ent.out || ent.k) : 'cleared')); Ga.render(); }
     else if (ds.act === 'addSlip') A.openSlip(null);
     else if (ds.act === 'calToday') { UI.ym = cur; Ga.render(); }
+    else if (ds.act === 'extract') { UI.plStart = UI.ym < cur ? cur : UI.ym; UI.plTgYm = UI.plStart; Ga.go('plan'); Ga.toast('Plan from ' + U.MONTHS[U.parseYm(UI.plStart).m - 1] + '. The Calendar stays as it is.'); }
     else if (ds.act === 'impSave') A.commitImport(UI);
     else if (ds.act === 'impCancel') { UI.pending = null; Ga.render(); }
-    else if (ds.act === 'tgToggle') { var tg = S.targets[UI.ym]; if (UI.targetOpen || (tg && tg.target)) { UI.targetOpen = false; if (tg) { delete S.targets[UI.ym]; St.touch('targets/' + UI.ym, 'Clear target'); } } else UI.targetOpen = true; Ga.render(); }
-    else if (ds.act === 'tgGo') { var v2 = U.num(document.getElementById('tgIn').value); if (!v2) { Ga.toast('Type a take-home amount first'); return; } var Rs = R.suggest(UI.ym, v2); S.targets[UI.ym] = { target: v2, sugg: Rs.sugg, res: Rs }; UI.targetOpen = true; St.touch('targets/' + UI.ym, 'Target ' + UI.ym); Ga.render(); }
-    else if (ds.act === 'tgApply') { var tg2 = S.targets[UI.ym]; if (!tg2 || !tg2.sugg) return; var mm = S.months[UI.ym] || (S.months[UI.ym] = {}), ps = []; Object.keys(tg2.sugg).forEach(function (k) { mm[k] = tg2.sugg[k]; ps.push('months/' + UI.ym + '/' + k); }); tg2.sugg = {}; tg2.res.applied = true; ps.push('targets/' + UI.ym); St.touch(ps, 'Apply target days'); Ga.render(); Ga.toast('Target days added to the calendar'); }
-    else if (ds.act === 'tgReset') { S.settings.tg = U.clone(R.DEFAULT_TG); var t3 = S.targets[UI.ym], ps3 = ['settings']; if (t3 && t3.target) { var r3 = R.suggest(UI.ym, t3.target); t3.sugg = r3.sugg; t3.res = r3; ps3.push('targets/' + UI.ym); } St.touch(ps3, 'Reset target rules'); UI.rulesOpen = true; Ga.render(); }
-    else if (ds.act === 'tgClear') { delete S.targets[UI.ym]; UI.targetOpen = false; St.touch('targets/' + UI.ym, 'Clear target'); Ga.render(); }
-    else if (ds.act === 'clearMonth') { if (!UI.clearArm) { UI.clearArm = true; Ga.render(); return; } UI.clearArm = false; var ds2 = Object.keys(S.months[UI.ym] || {}); delete S.months[UI.ym]; St.touch(ds2.map(function (d) { return 'months/' + UI.ym + '/' + d; }), 'Clear ' + UI.ym); Ga.render(); Ga.toast('Month cleared'); }
+    else if (ds.act === 'tgGo') A.tgGo(UI);
+    else if (ds.act === 'tgApply') A.tgApply(UI);
+    else if (ds.act === 'tgReset') A.tgReset(UI);
+    else if (ds.act === 'tgClear') A.tgClear(UI);
+    else if (ds.act === 'clearMonth') { if (!UI.clearArm) { UI.clearArm = true; Ga.render(); return; } UI.clearArm = false; var mm2 = S.months[UI.ym] || {}, ds2 = Object.keys(mm2).filter(function (d) { return !mm2[d].real; }); ds2.forEach(function (d) { delete mm2[d]; }); if (!Object.keys(mm2).length) delete S.months[UI.ym]; if (!ds2.length) { Ga.toast('Nothing to clear'); Ga.render(); return; } St.touch(ds2.map(function (d) { return 'months/' + UI.ym + '/' + d; }), 'Clear ' + UI.ym); Ga.render(); Ga.toast(ds2.length + ' days cleared'); }
     else if (ds.act === 'sySave') A.sySave();
     else if (ds.act === 'syPull') { Ga.toast('Pulling…'); Sy.pull().then(function (r) { Ga.toast(r === 'updated' || r === 'merged' ? 'Updated from GitHub' : 'Up to date'); Ga.render(); }, function (e) { Ga.toast(e.message); Ga.render(); }); }
     else if (ds.act === 'syPush') { Sy.push('Manual push').then(function () { Ga.toast('Pushed'); Ga.render(); }, function (e) { Ga.toast(e.message); Ga.render(); }); }
@@ -199,14 +200,14 @@
   document.getElementById('main').addEventListener('change', function (e) {
     var id = e.target.id, v = e.target.value;
     if (e.target.dataset.tgr || e.target.dataset.tgdow) { V.readTgRules(UI); return; }
-    if (id === 'trkDate') { if (/^\d{4}-\d{2}-\d{2}$/.test(v)) { UI.trackDate = v; UI.trkType = null; UI.trkOut = null; Ga.render(); } }
+    if (id === 'trkDate') { if (/^\d{4}-\d{2}-\d{2}$/.test(v)) { var tt = U.today(), tI2 = U.iso(tt.y, tt.m, tt.d); if (v > tI2) { Ga.toast('The tracker stops at today.'); Ga.render(); return; } UI.trackDate = v; UI.trkType = null; UI.trkOut = null; Ga.render(); } }
+    else if (id === 'asWk' || id === 'asSa') { var asm = St.S.settings.assume = Object.assign({}, R.DEFAULT_ASSUME, St.S.settings.assume || {}); asm[id === 'asWk' ? 'wk' : 'sa'] = v; St.touch('settings', 'Assumed clock-out'); Ga.render(); }
+    else if (id === 'plTgYm') { UI.plTgYm = v; UI.targetOpen = true; Ga.render(); }
     else if (id === 'trkType') { UI.trkType = v; Ga.render(); }
     else if (id === 'trkOut') { UI.trkOut = v; UI.trkType = 'W'; Ga.render(); }
     else if (id === 'planYm') { UI.planYm = v; Ga.render(); }
-    else if (id === 'aheadFill') { UI.aheadFill = v; Ga.render(); }
     else if (id === 'plStart') { UI.plStart = v; Ga.render(); }
     else if (id === 'plN') { var nn = Math.min(48, Math.max(1, Math.round(+v) || 1)); UI.plN = nn; UI.plClearArm = false; Ga.render(); }
-    else if (id === 'aheadN') { UI.ahead = Math.min(48, Math.max(1, Math.round(+v) || 1)); Ga.render(); }
     else if (/^p[aAbB](mt|fr|sa|ph)$/.test(id)) { (id[1].toLowerCase() === 'a' ? UI.planA : UI.planB)[id.slice(2)] = v; if (/^p[AB]/.test(id)) UI.cmpOpen = true; else UI.plFillOpen = true; Ga.render(); }
   });
 

@@ -114,13 +114,13 @@
   R.SA_STEPS = ['12:30', '13:00', '15:00', '16:30', '17:00', '17:30'];
   function stepsUpTo(list, max) { var m = tmin(max); return list.filter(function (t) { return tmin(t) <= m; }); }
   R.withSugg = function (ym) { var d = Object.assign({}, S.months[ym] || {}), sg = (S.targets[ym] || {}).sugg || {}; Object.keys(sg).forEach(function (k) { d[k] = sg[k]; }); return d; };
-  R.suggest = function (ym, target, rules) {
+  R.suggest = function (ym, target, rules, baseDays) {
     var Rl = rules || S.settings.tg;
-    var p = parseYm(ym), n = daysIn(p.y, p.m), base = Object.assign({}, S.months[ym] || {}), td = today(), cur = ymOf(td.y, td.m);
-    var startD = Rl.from === 'month' ? 1 : (ym < cur ? 99 : ym === cur ? td.d : 1), wk = [], sa = [], rest = [];
+    var p = parseYm(ym), n = daysIn(p.y, p.m), base = Object.assign({}, baseDays || S.months[ym] || {}), td = today(), cur = ymOf(td.y, td.m);
+    var startD = Rl.from === 'month' ? 1 : (ym < cur ? 99 : ym === cur ? td.d + 1 : 1), wk = [], sa = [], rest = [];
     for (var d = startD; d <= n; d++) {
       var k = pad(d), t = dayType(p.y, p.m, d), ph = PH[iso(p.y, p.m, d)], e = base[k], dow = new Date(p.y, p.m - 1, d).getDay();
-      if (e && !(Rl.extend && e.k === 'W' && !ph && t !== 'SU')) continue;
+      if (e && (e.real || !(Rl.extend && e.k === 'W' && !ph && t !== 'SU'))) continue;
       if (ph) { if (Rl.ph) rest.push({ k: k, steps: ['X2'], ph: 1 }); continue; }
       if (t === 'SU') { if (Rl.sun) rest.push({ k: k, steps: ['X2'] }); continue; }
       if (t !== 'SA' && Rl.dow.indexOf(dow) < 0) continue;
@@ -166,9 +166,29 @@
     return R.money(ym, R.halves(ym, days));
   };
 
-  /* One month ahead: days already on the calendar stay; empty future days follow plan P (null = normal hours, no OT). */
+  R.todayIso = function () { var t = today(); return iso(t.y, t.m, t.d); };
+  R.DEFAULT_ASSUME = { wk: '17:30', sa: '13:00' };
+  /* Home forecast: real days, plus an assumed clock-out for every empty working day after today. */
+  R.assumedDays = function (ym, assume) {
+    assume = assume || S.settings.assume || R.DEFAULT_ASSUME;
+    var p = parseYm(ym), n = daysIn(p.y, p.m), days = Object.assign({}, S.months[ym] || {}), t0 = R.todayIso();
+    for (var d = 1; d <= n; d++) {
+      var k = pad(d); if (days[k]) continue; var k2 = iso(p.y, p.m, d); if (k2 <= t0) continue;
+      var t = dayType(p.y, p.m, d); if (t === 'SU' || PH[k2]) continue;
+      days[k] = { k: 'W', out: t === 'SA' ? assume.sa : assume.wk, assumed: 1 };
+    }
+    return days;
+  };
+  R.assumedMoney = function (ym, assume) { var H = R.halves(ym, R.assumedDays(ym, assume)), M = R.money(ym, H); M.H = H; return M; };
+  /* Plan scenario view of a month: real days win; planned days only count after today. */
+  R.planDays = function (ym) {
+    var p = parseYm(ym), n = daysIn(p.y, p.m), real = S.months[ym] || {}, pl = (S.plans && S.plans.days[ym]) || {}, t0 = R.todayIso(), out = {};
+    for (var d = 1; d <= n; d++) { var k = pad(d); if (real[k]) out[k] = real[k]; else if (pl[k] && iso(p.y, p.m, d) > t0) out[k] = pl[k]; }
+    return out;
+  };
+  /* One month ahead in the plan: real + planned days stay; remaining empty days after today follow pattern P (null = normal hours, no OT). */
   R.forecastMonth = function (ym, P) {
-    var p = parseYm(ym), n = daysIn(p.y, p.m), days = Object.assign({}, S.months[ym] || {}), td = today(), cur = ymOf(td.y, td.m);
+    var p = parseYm(ym), n = daysIn(p.y, p.m), days = R.planDays(ym), td = today(), cur = ymOf(td.y, td.m);
     if (P) for (var d = 1; d <= n; d++) {
       var k = pad(d); if (days[k]) continue;
       if (ym < cur || (ym === cur && d < td.d)) continue;
@@ -178,7 +198,7 @@
       if (t === 'SA') { if (P.sa !== 'off') days[k] = { k: 'W', out: P.sa }; continue; }
       days[k] = { k: 'W', out: t === 'FR' ? P.fr : P.mt };
     }
-    var H = R.halves(ym, days), M = R.money(ym, H); M.H = H; M.set = Object.keys(S.months[ym] || {}).length; return M;
+    var H = R.halves(ym, days), M = R.money(ym, H); M.H = H; M.set = Object.keys(days).length; return M;
   };
   R.forecast = function (fromYm, months, P) {
     var out = [], tot = { net: 0, gross: 0, ot: 0, ot2: 0, up: 0, ded: 0 };

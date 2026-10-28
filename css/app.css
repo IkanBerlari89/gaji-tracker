@@ -240,6 +240,15 @@ tr.sub td{color:var(--muted)}
 .day .dl.neg{color:var(--bad)}
 .day.sugg{border:1.5px dashed var(--accent);background:var(--accent-soft)}
 .day.miss{border:1.5px dashed var(--bad)}
+.day.locked{cursor:default}
+.day.future{opacity:.5}
+.day.real{border-left:3px solid var(--good)}
+.day .lbl.io{font-size:10px;letter-spacing:-.01em}
+.day.planned{border:1.5px dashed var(--accent)}
+.tag.lock{background:var(--good);color:#fff;padding:2px 3px;line-height:0}
+.tag.lock svg{width:9px;height:9px;display:block}
+.hero-sub.assume select{background:rgba(255,255,255,.12);color:var(--hero-ink);border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:2px 4px;font-weight:600;font-size:12px}
+.trk-nav button:disabled{opacity:.4}
 .day.miss .lbl{color:var(--bad)}
 .trk-nav input[type=date]{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-height:40px;font-weight:600}
 .day.sugg .lbl{color:var(--accent)}
@@ -266,6 +275,7 @@ tr.sub td{color:var(--muted)}
 .cal.compact .day .dn{font-size:11px}
 .cal.compact .day .lbl{font-size:10.5px}
 .cal.compact .day .dl{display:none}
+.cal.compact .day .lbl.io{font-size:8.5px}
 .cal.compact .day .rm{font-size:9.5px}
 .cal.compact .tag{font-size:8px;top:3px;right:3px}
 .plgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}

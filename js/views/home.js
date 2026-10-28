@@ -22,14 +22,16 @@
   V.home = function (UI) {
     var S = St.S, t = U.today(), todayIso = U.iso(t.y, t.m, t.d);
     if (!UI.trackDate) UI.trackDate = todayIso;
-    var td = parseIso(UI.trackDate), cp = { ym: td.ym, h: td.d <= 15 ? 1 : 2 }, M = R.monthMoney(cp.ym), H = R.halves(cp.ym), hh = H[cp.h];
+    if (UI.trackDate > todayIso) UI.trackDate = todayIso;
+    var td = parseIso(UI.trackDate), cp = { ym: td.ym, h: td.d <= 15 ? 1 : 2 }, M = R.assumedMoney(cp.ym), H = M.H, hh = H[cp.h], as = S.settings.assume || R.DEFAULT_ASSUME;
     var half = cp.h === 1 ? M.half1 : M.half2, rec = S.records[cp.ym + '-' + cp.h], y = td.y, miss = Ga.missing();
     var h = '<div class="home"><div class="col">';
     // hero: predicted payslip for the half of the tracked date, month total underneath
     h += '<section class="hero" aria-label="Predicted payslip"><span class="eyebrow">Predicted payslip · ' + U.periodName(cp.ym, cp.h) + '</span>' +
       '<div class="hero-amt"><small>RM</small>' + fm(half) + '</div>' +
       '<div class="hero-sub">Month ' + MONTHS[td.m - 1] + ' ' + y + ': <b style="color:var(--hero-ink)">RM' + fm(M.net) + '</b> · 1st half ' + fm(M.half1) + ' + 2nd half ' + fm(M.half2) + (rec && rec.payslip && rec.payslip.net != null ? ' · actual payslip RM' + fm(rec.payslip.net) : '') + '</div>' +
-      '<div class="hero-sub" style="margin-top:4px">' + (cp.h === 1 ? '1st half has no deductions.' : 'EPF, SOCSO, EIS' + (S.settings.skbbk ? ', SKBBK' : '') + ' (RM' + fm(M.ded) + ') come off this half.') + '</div></section>';
+      '<div class="hero-sub" style="margin-top:4px">' + (cp.h === 1 ? '1st half has no deductions.' : 'EPF, SOCSO, EIS' + (S.settings.skbbk ? ', SKBBK' : '') + ' (RM' + fm(M.ded) + ') come off this half.') + '</div>' +
+      '<div class="hero-sub assume" style="margin-top:10px">Days ahead assumed: weekday out <select id="asWk" aria-label="Assumed weekday clock-out">' + ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00'].map(function (x) { return '<option value="' + x + '"' + (x === as.wk ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select> · Saturday out <select id="asSa" aria-label="Assumed Saturday clock-out">' + ['11:30', '12:30', '13:00', '15:00', '16:30', '17:00'].map(function (x) { return '<option value="' + x + '"' + (x === as.sa ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div></section>';
     h += trackerCard(UI, todayIso, miss);
     if (miss.length) h += missingCard(miss);
     h += otCard(UI, cp, M, H);
@@ -49,7 +51,7 @@
 
   /* Daily tracker: pick a date, set what happened, save. */
   function trackerCard(UI, todayIso, miss) {
-    var S = St.S, iso = UI.trackDate, p = parseIso(iso), e = (S.months[p.ym] || {})[pad(p.d)], c = R.dayCalc(p.ym, p.d, e), ty = c.t, isToday = iso === todayIso;
+    var S = St.S, iso = UI.trackDate, p = parseIso(iso), e = (S.months[p.ym] || {})[pad(p.d)], c = R.dayCalc(p.ym, p.d, e), ty = c.t, isToday = iso === todayIso, locked = !!(e && e.real);
     var type = UI.trkType != null ? UI.trkType : (e ? (e.k === 'W' ? 'W' : e.k) : ''), out = UI.trkOut || (e && e.out) || (ty === 'SA' ? '13:00' : '18:00');
     var ent = type === '' ? null : type === 'W' ? { k: 'W', out: out } : { k: type };
     if (ent && e && e.real && type === e.k && (type !== 'W' || out === e.out)) ent = e;
@@ -57,17 +59,18 @@
     var times = ty === 'SA' ? ['11:30', '12:30', '13:00', '15:00', '16:30', '17:00'] : ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30'];
     var h = '<section class="card trk"><div class="card-h" style="margin-bottom:10px"><div><div class="eyebrow">Daily tracker' + (isToday ? ' · today' : '') + (c.ph ? ' · ' + esc(c.ph) : '') + '</div><h2>' + niceDate(iso) + '</h2></div>' +
       '<span class="chip ' + (e ? (e.k === 'W' ? 'good' : 'blue') : isMiss ? 'bad' : '') + '">' + (e ? (e.k === 'W' ? 'Saved · out ' + esc(e.out) : 'Saved · ' + (U.LEAVES[e.k] || e.k)) : isMiss ? 'Not filled' : ty === 'SU' ? 'Sunday' : 'Empty') + '</span></div>';
-    h += '<div class="row trk-nav"><button class="icon-btn" data-trk="-1" aria-label="Previous day">' + IC().left + '</button><input type="date" id="trkDate" value="' + iso + '" aria-label="Pick a date" style="flex:1;min-width:0"><button class="icon-btn" data-trk="1" aria-label="Next day">' + IC().right + '</button>' + (isToday ? '' : '<button class="btn sm" data-trk="today">Today</button>') + '</div>';
+    h += '<div class="row trk-nav"><button class="icon-btn" data-trk="-1" aria-label="Previous day">' + IC().left + '</button><input type="date" id="trkDate" value="' + iso + '" max="' + todayIso + '" aria-label="Pick a date" style="flex:1;min-width:0"><button class="icon-btn" data-trk="1" aria-label="Next day"' + (isToday ? ' disabled' : '') + '>' + IC().right + '</button>' + (isToday ? '' : '<button class="btn sm" data-trk="today">Today</button>') + '</div>';
     h += '<div class="row" style="margin-top:10px"><div class="field"><label for="trkType">What happened</label><select id="trkType"><option value=""' + (type === '' ? ' selected' : '') + '>Not set' + (ty === 'SU' ? ' · rest day' : ' · counts as normal day') + '</option><option value="W"' + (type === 'W' ? ' selected' : '') + '>Worked · clock-out time</option>' +
       Object.keys(U.LEAVES).map(function (k) { return '<option value="' + k + '"' + (type === k ? ' selected' : '') + '>' + U.LEAVES[k] + '</option>'; }).join('') + '</select></div>' +
       '<div class="field" style="max-width:140px"><label for="trkOut">Clock out</label><input id="trkOut" type="time" value="' + esc(out) + '"' + (type === 'W' ? '' : ' disabled') + '></div></div>';
-    if (ty !== 'SU' || c.ph) h += '<div class="quick" style="margin-top:8px">' + times.map(function (x) { return '<button data-trkq="t:' + x + '" aria-pressed="' + (type === 'W' && out === x) + '">' + x + '</button>'; }).join('') + ['AL', 'MC', 'OFF', 'UPH', 'UPL'].map(function (k) { return '<button class="lv" data-trkq="' + k + '" aria-pressed="' + (type === k) + '">' + k + '</button>'; }).join('') + '</div>';
+    if (locked) h += '';
+    else if (ty !== 'SU' || c.ph) h += '<div class="quick" style="margin-top:8px">' + times.map(function (x) { return '<button data-trkq="t:' + x + '" aria-pressed="' + (type === 'W' && out === x) + '">' + x + '</button>'; }).join('') + ['AL', 'MC', 'OFF', 'UPH', 'UPL'].map(function (k) { return '<button class="lv" data-trkq="' + k + '" aria-pressed="' + (type === k) + '">' + k + '</button>'; }).join('') + '</div>';
     else h += '<div class="quick" style="margin-top:8px"><button data-trkq="X2" aria-pressed="' + (type === 'X2') + '">Worked (2×)</button></div>';
     if (type === 'AL' && R.alLeft(p.y) !== null && R.alLeft(p.y) <= 0 && iso >= S.settings.alAsOf) h += '<div class="note warn" style="margin-top:8px">AL balance for ' + p.y + ' is 0. This AL counts as unpaid (−RM' + fm(R.rates(p.ym).unpaid) + ').</div>';
     h += '<dl class="kv" style="margin-top:10px"><dt>OT 1.5×</dt><dd>' + fh(cc.ot) + ' h · RM' + fm(cc.otAmt) + '</dd>' + (cc.ot2 ? '<dt>OT 2×</dt><dd>' + fh(cc.ot2) + ' h · RM' + fm(cc.x2Amt) + '</dd>' : '') + (cc.up ? '<dt>Unpaid</dt><dd>−RM' + fm(cc.upAmt) + '</dd>' : '') + '<dt>Paid hours</dt><dd>' + (cc.paid != null ? fh(cc.paid) + (cc.est ? ' (est.)' : '') : '—') + '</dd><div class="sep"></div><dt>Day total</dt><dd class="big">RM' + fm(cc.total) + '</dd></dl>';
     if (cc.nr) h += '<p class="tiny muted" style="margin-top:4px">NR shows on the time card from 19:00. The money is the OT hours.</p>';
-    if (e && e.real) h += '<p class="tiny muted" style="margin-top:4px">From the time card (in ' + esc(e['in'] || '—') + ', paid ' + (e.paid != null ? fh(e.paid) : '—') + 'h). Saving keeps the import mark.</p>';
-    h += '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="trkSave" style="flex:1"' + (dirty ? '' : ' disabled') + '>' + (dirty ? 'Save ' + p.d + ' ' + MON3[p.m - 1] : 'Saved') + '</button>' + (e ? '<button class="btn" data-act="trkClear">Clear day</button>' : '') + '</div>';
+    if (e && e.real) h += '<div class="note good" style="margin-top:8px"><b>Locked.</b> From the time card (in ' + esc(e['in'] || '—') + ', out ' + esc(e.out || '—') + ', paid ' + (e.paid != null ? fh(e.paid) : '—') + 'h). Import again to change it.</div>';
+    else h += '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="trkSave" style="flex:1"' + (dirty ? '' : ' disabled') + '>' + (dirty ? 'Save ' + p.d + ' ' + MON3[p.m - 1] : 'Saved') + '</button>' + (e ? '<button class="btn" data-act="trkClear">Clear day</button>' : '') + '</div>';
     return h + '</section>';
   }
   function missingCard(miss) {
