@@ -44,10 +44,10 @@
       var k = c.kind === 'early' ? 'k-early' : c.kind === 'half' ? 'k-norm' : c.kind === 'empty' ? '' : 'k-' + c.kind, isMiss = !e && missSet[iso];
       var lbl = c.label || (c.t === 'SU' ? '' : isMiss ? '?' : future ? '' : '—');
       if (real && !plan && e.k === 'W' && e['in']) lbl = esc(e['in']) + '–' + esc(e.out);
-      var rm = c.t === 'SU' && !c.ot2 ? '' : (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total));
+      var rm = (c.t === 'SU' && !c.ot2) || (isMiss && !plan) ? '' : (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total));
       cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (planned ? ' planned' : '') + (real && !plan ? ' real' : '') + (locked ? ' locked' : '') + (future && !plan && !e ? ' future' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(c.label || lbl) + (real ? ' (time card, locked)' : locked ? ' (locked)' : '') + '">' +
         '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span>' +
-        '<span class="lbl' + (real && e.k === 'W' && e['in'] ? ' io' : '') + '">' + lbl + '</span>' + (c.dlab ? '<span class="dl ' + (c.dh > 0 ? 'pos' : c.dh < 0 || c.up ? 'neg' : '') + '">' + esc(c.dlab) + '</span>' : '') +
+        '<span class="lbl' + (real && e.k === 'W' && e['in'] ? ' io' : '') + '">' + lbl + '</span>' + (c.dlab ? '<span class="dl ' + (c.dh > 0 ? 'pos' : c.dh < 0 || c.up ? 'neg' : '') + '">' + esc(c.dlab) + '</span>' : isMiss && !plan ? '<span class="dl neg">not filled</span>' : '') +
         (sg ? '<span class="tag sg">TARGET</span>' : real && !plan ? '<span class="tag lock" title="From time card">' + IC().lock + '</span>' : planned ? '<span class="tag sg">PLAN</span>' : c.nr ? '<span class="tag">NR</span>' : '') +
         '<span class="rm">' + (rm === '' ? '' : 'RM' + rm) + '</span></button>');
     }

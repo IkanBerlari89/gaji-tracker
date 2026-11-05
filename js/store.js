@@ -24,8 +24,26 @@
     s.settings.assume = Object.assign({}, R.DEFAULT_ASSUME, s.settings.assume || {});
     s.months = s.months || {}; s.records = s.records || {}; s.targets = s.targets || {}; s.plans = s.plans && s.plans.days ? s.plans : { days: {} };
     s.meta = s.meta || {}; s.meta.stamps = s.meta.stamps || {}; s.meta.updatedAt = s.meta.updatedAt || null;
+    St.quarantineFuture(s);
     return s;
   }
+  /* The Calendar holds real days only. Anything dated after today that is not planned leave (AL/UPH/UPL) and not from a time card
+     cannot be real, so it is moved into the plan scenario. Old app versions wrote target/fill days straight into the calendar. */
+  St.quarantineFuture = function (s) {
+    var t = U.today(), t0 = U.iso(t.y, t.m, t.d), moved = 0, now = U.nowIso();
+    Object.keys(s.months).forEach(function (ym) {
+      var m = s.months[ym];
+      Object.keys(m).forEach(function (d) {
+        var e = m[d]; if (!e || e.real) return; if (e.k === 'AL' || e.k === 'UPH' || e.k === 'UPL') return;
+        if (ym + '-' + d <= t0) return;
+        var pl = s.plans.days[ym] = s.plans.days[ym] || {}; if (!pl[d]) pl[d] = Object.assign({}, e, { plan: 1 });
+        delete m[d]; s.meta.stamps['months/' + ym + '/' + d] = now; s.meta.stamps['plans/' + ym + '/' + d] = now; moved++;
+      });
+      if (!Object.keys(m).length) delete s.months[ym];
+    });
+    if (moved) { s.meta.updatedAt = now; St._quarantined = (St._quarantined || 0) + moved; }
+    return moved;
+  };
   function assign(src) { S.settings = src.settings; S.months = src.months; S.records = src.records; S.targets = src.targets; S.plans = src.plans; S.meta = src.meta; if (R.state() !== S) R.bind(S); else R.computeAL(); }
   St.snapshot = function () { return { type: 'gaji-state', version: 2, settings: S.settings, months: S.months, records: S.records, targets: S.targets, plans: S.plans, meta: S.meta }; };
   St.text = function () { return JSON.stringify(St.snapshot(), null, 1); };
@@ -96,7 +114,7 @@
     out.meta.updatedAt = a > b ? a : b;
     return out;
   };
-  St.replaceWith = function (remote) { assign(fix(U.clone(remote))); St.persist(); emit('replace'); };
+  St.replaceWith = function (remote) { St._quarantined = 0; assign(fix(U.clone(remote))); St.persist(); if (St._quarantined) St.setDirty(true); emit('replace'); };
   St.mergeIn = function (remote) { var m = St.merge(St.snapshot(), remote); assign(m); St.persist(); emit('replace'); return m; };
 
   /* ---- backups (old gaji-backup v2 files from gaji-tracker.html are accepted as-is) ---- */
@@ -136,7 +154,9 @@
     if (!c) {
       try { var v1 = JSON.parse(St.lsGet(LS_V1) || 'null'); if (v1 && (v1.months || v1.records)) { c = { settings: v1.settings, months: v1.months, records: v1.records, targets: v1.targets, meta: { stamps: {}, updatedAt: U.nowIso() } }; St.setDirty(true); } } catch (e) {}
     }
+    St._quarantined = 0;
     assign(fix(c || { settings: U.clone(St.DEFAULTS), months: {}, records: {}, targets: {}, plans: { days: {} }, meta: { stamps: {}, updatedAt: null } }));
+    if (St._quarantined) { St.persist(); St.setDirty(true); }
     return S;
   };
 

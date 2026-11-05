@@ -93,6 +93,14 @@ function t(name, fn) { n++; return Promise.resolve().then(fn).then(function () {
     assert.equal(A.Gaji.Sy.status.state, 'offline'); assert.ok(A.Gaji.St.dirty());
   });
 
+  await t('a work entry dated after today in the calendar is moved to the plan on load', function () {
+    var c = makeCtx(); var far = '2099-01'; c.localStorage.setItem('gaji-tracker-v2', JSON.stringify({ settings: { basic: 3900 }, months: { [far]: { '05': { k: 'W', out: '18:30' }, '06': { k: 'AL' } } }, records: {}, targets: {}, plans: { days: {} }, meta: { stamps: {}, updatedAt: null } }));
+    c.Gaji.St.load();
+    assert.ok(!c.Gaji.St.S.months[far] || !c.Gaji.St.S.months[far]['05'], 'future work entry removed from calendar');
+    assert.equal(c.Gaji.St.S.months[far]['06'].k, 'AL', 'planned leave stays');
+    assert.equal(c.Gaji.St.S.plans.days[far]['05'].out, '18:30', 'moved to the plan'); assert.ok(c.Gaji.St.dirty());
+  });
+
   await t('old gaji-backup v2 restores into v2 state', function () {
     var c = makeCtx(); c.Gaji.St.load();
     var err = c.Gaji.St.restore({ type: 'gaji-backup', version: 2, settings: { basic: 3900, basicBefore: 3000, raiseFrom: '2026-08', alAsOf: '2026-10-19', alLeft: 0 }, months: { '2026-09': { '07': { k: 'UPL' } } }, records: { '2026-07-2': { source: 'history', payslip: { net: 1283.63 } } }, targets: {} });
