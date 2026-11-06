@@ -48,7 +48,7 @@
       cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (planned ? ' planned' : '') + (real && !plan ? ' real' : '') + (locked ? ' locked' : '') + (future && !plan && !e ? ' future' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(c.label || lbl) + (real ? ' (time card, locked)' : locked ? ' (locked)' : '') + '">' +
         '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span>' +
         '<span class="lbl' + (real && e.k === 'W' && e['in'] ? ' io' : '') + '">' + lbl + '</span>' + (c.dlab ? '<span class="dl ' + (c.dh > 0 ? 'pos' : c.dh < 0 || c.up ? 'neg' : '') + '">' + esc(c.dlab) + '</span>' : isMiss && !plan ? '<span class="dl neg">not filled</span>' : '') +
-        (sg ? '<span class="tag sg">TARGET</span>' : real && !plan ? '<span class="tag lock" title="From time card">' + IC().lock + '</span>' : planned ? '<span class="tag sg">PLAN</span>' : c.nr ? '<span class="tag">NR</span>' : '') +
+        (sg ? '<span class="tag sg">TARGET</span>' : real && !plan ? '<span class="tag lock" title="' + (e.edited ? 'From time card, edited by hand' : 'From time card') + '"' + (e.edited ? ' style="background:var(--amber-strong)"' : '') + '>' + IC().lock + '</span>' : planned ? '<span class="tag sg">PLAN</span>' : c.nr ? '<span class="tag">NR</span>' : '') +
         '<span class="rm">' + (rm === '' ? '' : 'RM' + rm) + '</span></button>');
     }
     return h + cells.join('') + '</div>';
@@ -117,16 +117,23 @@
       (cc.early ? '<dt class="tiny" style="grid-column:1/-1;color:var(--bad)">Left before the scheduled end. No OT, and the time card drops to the previous 30-minute mark.</dt>' : '') +
       (cc.nr ? '<dt class="tiny" style="grid-column:1/-1">NR appears on the time card from 19:00. For you it is a label; the money is the OT hours.</dt>' : '');
   }
-  A.openDay = function (UI, d, ymArg) {
+  A.openDay = function (UI, d, ymArg, unlocked) {
     var S = St.S, ym = ymArg || UI.ym, p = U.parseYm(ym), e = (S.months[ym] || {})[pad(d)], c = R.dayCalc(ym, d, e), future = A.isFuture(ym, d);
-    var val = e ? (e.k === 'W' ? 'W' : e.k) : '';
-    if (e && e.real) {
-      Ga.sheet(dayHead(p, d, c, 'from time card') + '<div class="stack"><div class="note good"><b>Locked.</b> This day comes from the imported time card. To change it, import the time card again from the Import tab.</div>' +
+    var val = e ? (e.k === 'W' ? 'W' : e.k) : '', isReal = !!(e && e.real);
+    if (isReal && !unlocked) {
+      Ga.sheet(dayHead(p, d, c, 'from time card') + '<div class="stack"><div class="note good"><b>Locked.</b> This day comes from the imported time card' + (e.edited ? ', edited by hand' : '') + '.</div>' +
         '<dl class="kv"><dt>Clock in</dt><dd>' + esc(e['in'] || '—') + '</dd><dt>Clock out</dt><dd>' + esc(e.out || '—') + '</dd><dt>Type</dt><dd>' + (e.k === 'W' ? 'Worked' : LEAVES[e.k] || e.k) + '</dd>' + (e.remark ? '<dt>Remark</dt><dd>' + esc(e.remark) + '</dd>' : '') + '<div class="sep"></div>' + resKv(c) + '</dl>' +
-        '<div class="row"><button class="btn" data-close="1" style="flex:1">Close</button><button class="btn ghost" data-go="imp">Import tab</button></div></div>', 'dayT');
+        '<div id="unlockBox"><div class="row"><button class="btn" data-close="1" style="flex:1">Close</button><button class="btn ghost" id="dUnlock">' + IC().lock + ' Unlock</button></div></div></div>', 'dayT');
+      document.getElementById('dUnlock').onclick = function () {
+        document.getElementById('unlockBox').innerHTML = '<div class="note warn"><b>Unlock ' + d + ' ' + MONTHS[p.m - 1] + '?</b> Only do this if the AI misread the time card. The day locks again as soon as you save.</div><div class="row" style="margin-top:8px"><button class="btn danger" id="dUnlockYes" style="flex:1">Yes, unlock</button><button class="btn" id="dUnlockNo">Cancel</button></div>';
+        document.getElementById('dUnlockYes').onclick = function () { A.openDay(UI, d, ym, true); };
+        document.getElementById('dUnlockNo').onclick = function () { A.openDay(UI, d, ym); };
+      };
       return;
     }
-    var h = dayHead(p, d, c, future ? 'ahead · leave only' : '') + '<div class="stack">';
+    if (isReal) future = false;
+    var h = dayHead(p, d, c, isReal ? 'unlocked · locks again on save' : future ? 'ahead · leave only' : '') + '<div class="stack">';
+    if (isReal) h += '<div class="note warn">Unlocked. Time card: in ' + esc(e['in'] || '—') + ', out ' + esc(e.out || '—') + (e.paid != null ? ', paid ' + fh(e.paid) + 'h' : '') + '. Change what happened, then Save; paid hours are recomputed.</div>';
     if (future) {
       h += '<div class="note">Days ahead are locked for clock-out times. You can mark planned <b>AL</b>, <b>UPH</b> or <b>UPL</b> now; set working hours on the day itself, or try what-ifs in Plan.</div>';
       h += '<div class="field"><label for="dType">Day</label><select id="dType"><option value="">Not set</option>' + ['AL', 'UPH', 'UPL'].map(function (k) { return '<option value="' + k + '"' + (val === k ? ' selected' : '') + '>' + LEAVES[k] + '</option>'; }).join('') + '</select></div>';
@@ -151,8 +158,10 @@
     document.getElementById('dSave').onclick = function () {
       var t = document.getElementById('dType').value, oEl = document.getElementById('dOut'), o = oEl ? oEl.value : '', ent;
       if (t === '') ent = null; else if (t === 'W') ent = { k: 'W', out: o }; else ent = { k: t };
-      A.setDay(ym, d, ent); Ga.closeLayer(); Ga.render();
+      if (isReal && ent) { ent = Object.assign({ real: 1, 'in': e['in'] || null, remark: e.remark || null }, ent, { edited: 1 }); }
+      A.setDay(ym, d, ent, isReal ? 'Calendar ' + MON3[p.m - 1] + ' ' + d + ' (unlocked edit)' : undefined); Ga.closeLayer(); Ga.render(); if (isReal) Ga.toast('Saved and locked again');
     };
     document.getElementById('dClear').onclick = function () { A.setDay(ym, d, null); Ga.closeLayer(); Ga.render(); };
   };
+  /* mark a hand-edited time-card day in the grid */
 })(window);

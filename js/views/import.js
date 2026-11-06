@@ -122,13 +122,19 @@
     var from = hf === 1 ? 1 : 16, to = hf === 1 ? 15 : P.n, p = U.parseYm(P.ym);
     var h = '<section class="card"><div class="card-h"><div><div class="eyebrow">Preview' + (P.fromPath ? ' · from repo' : '') + '</div><h2>' + U.periodName(P.ym, hf) + '</h2>' + (P.name ? '<span class="small muted">' + esc(P.name) + '</span>' : '') + '</div><span class="chip accent">' + Object.keys(P.days).length + ' days read</span></div>';
     if (P.warn.length) h += '<div class="note" style="margin-bottom:12px">' + P.warn.map(esc).join('<br>') + '</div>';
-    h += '<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th class="r">Paid</th><th class="r">OT</th><th>Remark</th></tr></thead><tbody>';
+    h += '<p class="tiny muted" style="margin-bottom:6px">Check each row against the paper. Fix anything the AI misread here before you save; the tally below updates as you edit.</p>';
+    h += '<div class="tbl-wrap"><table class="edit"><thead><tr><th>Date</th><th>Day</th><th>In</th><th>Out</th><th class="r">Paid</th><th class="r">OT</th><th>Remark</th></tr></thead><tbody>';
+    var TYPES = [['', '— none'], ['W', 'Worked'], ['AL', 'AL'], ['MC', 'MC'], ['OFF', 'OFF'], ['CL', 'Other leave'], ['UPH', 'Unpaid ½'], ['UPL', 'Unpaid full'], ['X2', 'Worked 2×']];
     for (var d = from; d <= to; d++) {
-      var e = days[pad(d)], c = R.dayCalc(P.ym, d, e), t = U.dayType(p.y, p.m, d);
-      if (!e && t === 'SU') continue;
-      h += '<tr' + (t === 'SU' ? ' class="sub"' : '') + '><td>' + d + ' ' + U.DOW3[new Date(p.y, p.m - 1, d).getDay()] + (c.ph ? ' ' + IC().flag : '') + '</td><td>' + esc(e && e['in'] || '—') + '</td><td>' + esc(e && e.out || (e ? e.k : '—')) + '</td><td class="r">' + (e && e.paid != null ? fh(e.paid) : '—') + '</td><td class="r">' + (c.ot ? fh(c.ot) : c.ot2 ? fh(c.ot2) + '×2' : '') + '</td><td>' + esc(e && e.remark || '') + (c.nr && !(e && e.remark) ? '<span class="chip amber">NR</span>' : '') + '</td></tr>';
+      var e = days[pad(d)], c = R.dayCalc(P.ym, d, e), t = U.dayType(p.y, p.m, d), k = e ? (e.k === 'W' ? 'W' : e.k) : '', dd = pad(d);
+      h += '<tr' + (t === 'SU' ? ' class="sub"' : '') + (e && e.edited ? ' style="background:var(--amber-soft)"' : '') + '><td>' + d + ' ' + U.DOW3[new Date(p.y, p.m - 1, d).getDay()] + (c.ph ? ' ' + IC().flag : '') + '</td>' +
+        '<td><select data-pd="' + dd + '" data-pf="k" aria-label="Day type">' + TYPES.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === k ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></td>' +
+        '<td><input type="time" data-pd="' + dd + '" data-pf="in" value="' + esc(e && e['in'] || '') + '"' + (k === 'W' ? '' : ' disabled') + ' aria-label="Clock in"></td>' +
+        '<td><input type="time" data-pd="' + dd + '" data-pf="out" value="' + esc(e && e.out || '') + '"' + (k === 'W' ? '' : ' disabled') + ' aria-label="Clock out"></td>' +
+        '<td class="r">' + (c.paid != null ? fh(c.paid) + (e && e.paid == null && k === 'W' ? '~' : '') : '—') + '</td><td class="r">' + (c.ot ? fh(c.ot) : c.ot2 ? fh(c.ot2) + '×2' : '') + '</td>' +
+        '<td><input type="text" data-pd="' + dd + '" data-pf="remark" value="' + esc(e && e.remark || '') + '" placeholder="' + (c.nr && !(e && e.remark) ? 'NR' : '') + '" aria-label="Remark" style="min-width:90px"></td></tr>';
     }
-    h += '</tbody></table></div>';
+    h += '</tbody></table></div><p class="tiny muted" style="margin-top:4px">Paid hours marked ~ are recomputed for rows you changed.</p>';
     var o = hf === 1 ? M.o1 : M.o2, x = hf === 1 ? M.x1 : M.x2, u = hf === 1 ? M.u1 : M.u2, earn = hf === 1 ? M.earn1 : M.earn2, net = hf === 1 ? M.half1 : M.half2, hh = H[hf];
     var lines = [['OT 1.5× hours', hh.ot, ps && ps.ot15_hours, 1], ['OT 1.5× pay', o, ps && ps.ot15_amount], ['OT 2× hours', hh.ot2, ps && ps.ot20_hours, 1], ['OT 2× pay', x, ps && ps.ot20_amount], ['Unpaid days', hh.up, ps && ps.unpaid_days, 1], ['Unpaid amount', u, ps && ps.unpaid_amount], ['Total earnings', earn, ps && ps.total_earnings]];
     if (hf === 2) lines.push(['EPF', M.epf, ps && ps.epf], ['SOCSO', M.socso, ps && ps.socso], ['EIS', M.eis, ps && ps.eis], ['SKBBK', M.skbbk, ps && ps.skbbk]);
@@ -147,6 +153,22 @@
     h += '<div class="row" style="margin-top:14px"><button class="btn primary" data-act="impSave" style="flex:1">Save to calendar' + (ps ? ' + payslip' : '') + '</button><button class="btn" data-act="impCancel">Discard</button></div>';
     h += '<p class="tiny muted" style="margin-top:8px">' + (Sy.ready() ? 'Saving also keeps this file in your GitHub repo under imports/.' : 'Set up sync to keep a copy of each import in your repo.') + '</p></section>';
     return h;
+  };
+  /* Edit one preview row before saving. */
+  A.editPending = function (UI, dd, field, value) {
+    var P = UI.pending; if (!P) return;
+    var e = P.days[dd], p = U.parseYm(P.ym), t = U.dayType(p.y, p.m, +dd);
+    if (field === 'k') {
+      if (value === '') { delete P.days[dd]; Ga.render(); return; }
+      e = P.days[dd] = Object.assign({ real: 1, 'in': null, out: null, remark: null }, e || {}, { k: value, edited: 1 });
+      if (value === 'W' && !e.out) e.out = t === 'SA' ? '13:00' : '18:00';
+      delete e.paid;
+    } else if (field === 'in' || field === 'out') {
+      if (!e) return; e[field] = value || null; e.edited = 1; delete e.paid;
+    } else if (field === 'remark') {
+      if (!e) return; e.remark = value || null; e.edited = 1;
+    }
+    Ga.render();
   };
   A.commitImport = function (UI) {
     var P = UI.pending; if (!P) return;

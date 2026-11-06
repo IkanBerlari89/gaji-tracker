@@ -88,10 +88,13 @@
   A.shiftIso = function (s, k) { var p = A.parseIso(s), d = new Date(p.y, p.m - 1, p.d + k); return U.iso(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
   A.trkSave = function (UI) {
     var S = St.S, p = A.parseIso(UI.trackDate), e = (S.months[p.ym] || {})[U.pad(p.d)], ty = U.dayType(p.y, p.m, p.d);
-    if (e && e.real) { Ga.toast('From the time card · locked'); return; }
+    var isReal = !!(e && e.real);
+    if (isReal && UI.trkUnlocked !== UI.trackDate) { Ga.toast('From the time card · locked. Tap Unlock to correct it.'); return; }
     var type = UI.trkType != null ? UI.trkType : (e ? (e.k === 'W' ? 'W' : e.k) : ''), out = UI.trkOut || (e && e.out) || (ty === 'SA' ? '13:00' : '18:00'), ent;
-    if (type === '') ent = null; else if (type === 'W') ent = Object.assign({}, e && e.real && e.k === 'W' && e.out === out ? e : {}, { k: 'W', out: out }); else ent = Object.assign({}, e && e.real && e.k === type ? e : {}, { k: type });
-    A.setDay(p.ym, p.d, ent, 'Tracker ' + UI.trackDate + ' ' + (ent ? (ent.out || ent.k) : 'clear'));
+    if (type === '') ent = null; else if (type === 'W') ent = { k: 'W', out: out }; else ent = { k: type };
+    if (isReal && ent) ent = Object.assign({ real: 1, 'in': e['in'] || null, remark: e.remark || null }, ent, { edited: 1 });
+    A.setDay(p.ym, p.d, ent, 'Tracker ' + UI.trackDate + ' ' + (ent ? (ent.out || ent.k) : 'clear') + (isReal ? ' (unlocked edit)' : ''));
+    UI.trkUnlocked = null; UI.trkConfirm = null;
     var miss = Ga.missing(), next = miss.filter(function (k) { return k > UI.trackDate; })[0] || miss[0];
     UI.trkType = null; UI.trkOut = null;
     Ga.toast('Saved ' + p.d + ' ' + U.MON3[p.m - 1] + (next ? ' · next: ' + (+next.slice(8, 10)) + ' ' + U.MON3[+next.slice(5, 7) - 1] : miss.length ? '' : ' · all days filled'));
@@ -156,10 +159,13 @@
     if (ds.hero) { UI.heroScope = ds.hero; Ga.render(); }
     else if (ds.chartScope) { UI.chartScope = ds.chartScope; Ga.render(); }
     else if (ds.otScope) { UI.otScope = ds.otScope; Ga.render(); }
-    else if (ds.trk) { var t1 = U.today(), tI = U.iso(t1.y, t1.m, t1.d), nd = ds.trk === 'today' ? tI : A.shiftIso(UI.trackDate, +ds.trk); if (nd > tI) { Ga.toast('The tracker stops at today. Use Plan for days ahead.'); return; } UI.trackDate = nd; UI.trkType = null; UI.trkOut = null; Ga.render(); }
-    else if (ds.jump) { UI.trackDate = ds.jump; UI.trkType = null; UI.trkOut = null; Ga.go('home'); }
+    else if (ds.trk) { var t1 = U.today(), tI = U.iso(t1.y, t1.m, t1.d), nd = ds.trk === 'today' ? tI : A.shiftIso(UI.trackDate, +ds.trk); if (nd > tI) { Ga.toast('The tracker stops at today. Use Plan for days ahead.'); return; } UI.trackDate = nd; UI.trkType = null; UI.trkOut = null; UI.trkUnlocked = null; UI.trkConfirm = null; Ga.render(); }
+    else if (ds.jump) { UI.trackDate = ds.jump; UI.trkType = null; UI.trkOut = null; UI.trkUnlocked = null; UI.trkConfirm = null; Ga.go('home'); }
     else if (ds.trkq != null) { var q = ds.trkq; if (q.indexOf('t:') === 0) { UI.trkType = 'W'; UI.trkOut = q.slice(2); } else UI.trkType = q; Ga.render(); }
     else if (ds.act === 'trkSave') A.trkSave(UI);
+    else if (ds.act === 'trkUnlock') { UI.trkConfirm = UI.trackDate; Ga.render(); }
+    else if (ds.act === 'trkUnlockYes') { UI.trkUnlocked = UI.trackDate; UI.trkConfirm = null; UI.trkType = null; UI.trkOut = null; Ga.render(); }
+    else if (ds.act === 'trkUnlockNo') { UI.trkUnlocked = null; UI.trkConfirm = null; UI.trkType = null; UI.trkOut = null; Ga.render(); }
     else if (ds.act === 'trkClear') { var pc = A.parseIso(UI.trackDate); A.setDay(pc.ym, pc.d, null, 'Tracker clear ' + UI.trackDate); UI.trkType = null; UI.trkOut = null; Ga.render(); Ga.toast('Cleared ' + pc.d + ' ' + U.MON3[pc.m - 1]); }
     else if (ds.goym) { UI.ym = ds.goym; if (ds.go) Ga.go(ds.go); else { Ga.render(); window.scrollTo(0, 0); } }
     else if (ds.plstep) { UI.plN = Math.min(48, Math.max(1, UI.plN + +ds.plstep)); UI.plClearArm = false; Ga.render(); }
@@ -199,6 +205,7 @@
   });
   document.getElementById('main').addEventListener('change', function (e) {
     var id = e.target.id, v = e.target.value;
+    if (e.target.dataset.pd) { A.editPending(UI, e.target.dataset.pd, e.target.dataset.pf, v); return; }
     if (e.target.dataset.tgr || e.target.dataset.tgdow) { V.readTgRules(UI); return; }
     if (id === 'trkDate') { if (/^\d{4}-\d{2}-\d{2}$/.test(v)) { var tt = U.today(), tI2 = U.iso(tt.y, tt.m, tt.d); if (v > tI2) { Ga.toast('The tracker stops at today.'); Ga.render(); return; } UI.trackDate = v; UI.trkType = null; UI.trkOut = null; Ga.render(); } }
     else if (id === 'asWk' || id === 'asSa') { var asm = St.S.settings.assume = Object.assign({}, R.DEFAULT_ASSUME, St.S.settings.assume || {}); asm[id === 'asWk' ? 'wk' : 'sa'] = v; St.touch('settings', 'Assumed clock-out'); Ga.render(); }

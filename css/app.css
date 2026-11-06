@@ -301,6 +301,11 @@ tr.sub td{color:var(--muted)}
 .ok-ic{color:var(--good);font-weight:700}
 .bad-ic{color:var(--bad);font-weight:700}
 
+table.edit td{padding:4px 4px}
+table.edit select,table.edit input{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:5px 6px;min-height:34px;font-size:13px}
+table.edit input[type=time]{width:104px}
+table.edit input[type=text]{width:120px}
+
 /* plan */
 .plan-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .plan-res{border-radius:12px;padding:12px;background:var(--surface-2)}

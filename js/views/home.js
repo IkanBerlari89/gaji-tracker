@@ -51,7 +51,7 @@
 
   /* Daily tracker: pick a date, set what happened, save. */
   function trackerCard(UI, todayIso, miss) {
-    var S = St.S, iso = UI.trackDate, p = parseIso(iso), e = (S.months[p.ym] || {})[pad(p.d)], c = R.dayCalc(p.ym, p.d, e), ty = c.t, isToday = iso === todayIso, locked = !!(e && e.real);
+    var S = St.S, iso = UI.trackDate, p = parseIso(iso), e = (S.months[p.ym] || {})[pad(p.d)], c = R.dayCalc(p.ym, p.d, e), ty = c.t, isToday = iso === todayIso, isReal = !!(e && e.real), locked = isReal && UI.trkUnlocked !== iso;
     var type = UI.trkType != null ? UI.trkType : (e ? (e.k === 'W' ? 'W' : e.k) : ''), out = UI.trkOut || (e && e.out) || (ty === 'SA' ? '13:00' : '18:00');
     var ent = type === '' ? null : type === 'W' ? { k: 'W', out: out } : { k: type };
     if (ent && e && e.real && type === e.k && (type !== 'W' || out === e.out)) ent = e;
@@ -62,15 +62,21 @@
     h += '<div class="row trk-nav"><button class="icon-btn" data-trk="-1" aria-label="Previous day">' + IC().left + '</button><input type="date" id="trkDate" value="' + iso + '" max="' + todayIso + '" aria-label="Pick a date" style="flex:1;min-width:0"><button class="icon-btn" data-trk="1" aria-label="Next day"' + (isToday ? ' disabled' : '') + '>' + IC().right + '</button>' + (isToday ? '' : '<button class="btn sm" data-trk="today">Today</button>') + '</div>';
     h += '<div class="row" style="margin-top:10px"><div class="field"><label for="trkType">What happened</label><select id="trkType"><option value=""' + (type === '' ? ' selected' : '') + '>Not set' + (ty === 'SU' ? ' · rest day' : ' · counts as normal day') + '</option><option value="W"' + (type === 'W' ? ' selected' : '') + '>Worked · clock-out time</option>' +
       Object.keys(U.LEAVES).map(function (k) { return '<option value="' + k + '"' + (type === k ? ' selected' : '') + '>' + U.LEAVES[k] + '</option>'; }).join('') + '</select></div>' +
-      '<div class="field" style="max-width:140px"><label for="trkOut">Clock out</label><input id="trkOut" type="time" value="' + esc(out) + '"' + (type === 'W' ? '' : ' disabled') + '></div></div>';
+      '<div class="field" style="max-width:140px"><label for="trkOut">Clock out</label><input id="trkOut" type="time" value="' + esc(out) + '"' + (type === 'W' && !locked ? '' : ' disabled') + '></div></div>';
+    if (locked) h = h.replace('<select id="trkType">', '<select id="trkType" disabled>');
     if (locked) h += '';
     else if (ty !== 'SU' || c.ph) h += '<div class="quick" style="margin-top:8px">' + times.map(function (x) { return '<button data-trkq="t:' + x + '" aria-pressed="' + (type === 'W' && out === x) + '">' + x + '</button>'; }).join('') + ['AL', 'MC', 'OFF', 'UPH', 'UPL'].map(function (k) { return '<button class="lv" data-trkq="' + k + '" aria-pressed="' + (type === k) + '">' + k + '</button>'; }).join('') + '</div>';
     else h += '<div class="quick" style="margin-top:8px"><button data-trkq="X2" aria-pressed="' + (type === 'X2') + '">Worked (2×)</button></div>';
     if (type === 'AL' && R.alLeft(p.y) !== null && R.alLeft(p.y) <= 0 && iso >= S.settings.alAsOf) h += '<div class="note warn" style="margin-top:8px">AL balance for ' + p.y + ' is 0. This AL counts as unpaid (−RM' + fm(R.rates(p.ym).unpaid) + ').</div>';
     h += '<dl class="kv" style="margin-top:10px"><dt>OT 1.5×</dt><dd>' + fh(cc.ot) + ' h · RM' + fm(cc.otAmt) + '</dd>' + (cc.ot2 ? '<dt>OT 2×</dt><dd>' + fh(cc.ot2) + ' h · RM' + fm(cc.x2Amt) + '</dd>' : '') + (cc.up ? '<dt>Unpaid</dt><dd>−RM' + fm(cc.upAmt) + '</dd>' : '') + '<dt>Paid hours</dt><dd>' + (cc.paid != null ? fh(cc.paid) + (cc.est ? ' (est.)' : '') : '—') + '</dd><div class="sep"></div><dt>Day total</dt><dd class="big">RM' + fm(cc.total) + '</dd></dl>';
     if (cc.nr) h += '<p class="tiny muted" style="margin-top:4px">NR shows on the time card from 19:00. The money is the OT hours.</p>';
-    if (e && e.real) h += '<div class="note good" style="margin-top:8px"><b>Locked.</b> From the time card (in ' + esc(e['in'] || '—') + ', out ' + esc(e.out || '—') + ', paid ' + (e.paid != null ? fh(e.paid) : '—') + 'h). Import again to change it.</div>';
-    else h += '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="trkSave" style="flex:1"' + (dirty ? '' : ' disabled') + '>' + (dirty ? 'Save ' + p.d + ' ' + MON3[p.m - 1] : 'Saved') + '</button>' + (e ? '<button class="btn" data-act="trkClear">Clear day</button>' : '') + '</div>';
+    if (locked) {
+      h += '<div class="note good" style="margin-top:8px"><b>Locked.</b> From the time card (in ' + esc(e['in'] || '—') + ', out ' + esc(e.out || '—') + ', paid ' + (e.paid != null ? fh(e.paid) : '—') + 'h)' + (e.edited ? ', edited by hand' : '') + '.</div>';
+      h += UI.trkConfirm === iso ? '<div class="note warn" style="margin-top:8px"><b>Unlock ' + p.d + ' ' + MON3[p.m - 1] + '?</b> Only if the AI misread the time card. It locks again when you save.</div><div class="row" style="margin-top:8px"><button class="btn danger" data-act="trkUnlockYes" style="flex:1">Yes, unlock</button><button class="btn" data-act="trkUnlockNo">Cancel</button></div>' : '<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="trkUnlock">' + IC().lock + ' Unlock to correct</button></div>';
+    } else {
+      if (isReal) h += '<div class="note warn" style="margin-top:8px">Unlocked. Time card said in ' + esc(e['in'] || '—') + ', out ' + esc(e.out || '—') + '. Change what happened, then Save; it locks again.</div>';
+      h += '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="trkSave" style="flex:1"' + (dirty ? '' : ' disabled') + '>' + (dirty ? 'Save ' + p.d + ' ' + MON3[p.m - 1] : 'Saved') + '</button>' + (e && !isReal ? '<button class="btn" data-act="trkClear">Clear day</button>' : isReal ? '<button class="btn" data-act="trkUnlockNo">Cancel</button>' : '') + '</div>';
+    }
     return h + '</section>';
   }
   function missingCard(miss) {
