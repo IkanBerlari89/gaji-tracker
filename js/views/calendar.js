@@ -96,8 +96,8 @@
   A.isFuture = function (ym, d) { var t = U.today(); return ym + '-' + pad(d) > U.iso(t.y, t.m, t.d); };
   A.applyBrush = function (UI, d, ymArg) {
     var S = St.S, ym = ymArg || UI.ym, b = UI.brush, e = (S.months[ym] || {})[pad(d)], future = A.isFuture(ym, d);
-    if (e && e.real) { Ga.toast('From the time card · locked. Import the time card again to change it.'); return; }
     if (b === 'edit') { A.openDay(UI, d, ym); return; }
+    if (e && e.real) { Ga.toast('From the time card · locked. Tap it with the Edit brush and choose Unlock to correct it.'); return; }
     if (future && !(FUTURE_OK[b] || b === 'erase')) { Ga.toast('Days ahead are locked. Only AL, UPH or UPL can be set now. Use Plan for what-ifs.'); return; }
     var days = S.months[ym] || (S.months[ym] = {}), k = pad(d);
     if (b === 'erase') delete days[k];
