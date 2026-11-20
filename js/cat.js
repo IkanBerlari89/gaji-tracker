@@ -1,76 +1,113 @@
-/* A small pixel cat that lives along the bottom edge: walks, sits, sleeps, eats, meows. Purely decorative; can be turned off in More. */
+/* A pixel cat that lives along the bottom edge: walks, sits, sleeps, eats, meows. Decorative; can be turned off in More.
+   Each pose is composed on a 32×24 grid from simple shapes, then outlined automatically, so every frame has the same line weight. */
 (function (G) {
   'use strict';
   var Ga = G.Gaji, St = Ga.St;
-  var W = 20, H = 14, KEY = 'gaji-cat';
-  var host, el, ctx, timer = null, sayT = null, reduced = false;
-  var C = { x: 30, dir: 1, state: 'sit', frame: 0, until: 0, target: 0 };
-  var K = { b: '#F2A65A', d: '#D9812F', w: '#FBE6C8', k: '#2B2B33', p: '#F28C9A', bowl: '#5A8FE0', food: '#B9703F' };
-
-  function px(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+  var W = 32, H = 24, KEY = 'gaji-cat';
+  var host, el, ctx, timer = null, sayT = null, reduced = false, g = [];
+  var C = { x: 30, dir: 1, state: 'sit', frame: 0, until: 0, target: 0, mood: '' };
+  var PAL = { b: '#F6AA54', d: '#DE8530', w: '#FFEBCF', o: '#4A2E1B', k: '#2B2233', s: '#FFFFFF', p: '#F58CA0', r: '#FBB7A8', m: '#B5475B', u: '#6C9BE8', v: '#3F6FBE', f: '#B9703F' };
   function rnd(n) { return Math.floor(Math.random() * n); }
 
-  /* ---- poses, drawn facing right on a 20×14 grid; the ground is row 13 ---- */
+  /* ---- drawing on the grid ---- */
+  function clear() { g = []; for (var y = 0; y < H; y++) { var row = []; for (var x = 0; x < W; x++) row.push(''); g.push(row); } }
+  function set(x, y, c) { if (x >= 0 && x < W && y >= 0 && y < H) g[y][x] = c; }
+  function rect(x, y, w, h, c) { for (var j = 0; j < h; j++) for (var i = 0; i < w; i++) set(x + i, y + j, c); }
+  function ell(cx, cy, rx, ry, c) { for (var j = -ry; j <= ry; j++) for (var i = -rx; i <= rx; i++) if ((i * i) / (rx * rx) + (j * j) / (ry * ry) <= 1.06) set(cx + i, cy + j, c); }
+  function outline() {
+    var add = [], x, y;
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+      if (g[y][x]) continue;
+      if ((y > 0 && g[y - 1][x]) || (y < H - 1 && g[y + 1][x]) || (x > 0 && g[y][x - 1]) || (x < W - 1 && g[y][x + 1])) add.push([x, y]);
+    }
+    add.forEach(function (q) { g[q[1]][q[0]] = 'o'; });
+  }
+  function ear(x, y) { rect(x + 1, y, 2, 1, 'b'); rect(x, y + 1, 4, 3, 'b'); rect(x + 1, y + 1, 2, 2, 'p'); }
+  /* eyes, nose, mouth, blush. hw = half width of the head; mode: open | blink | happy | meow */
+  function face(cx, cy, mode, hw) {
+    var eL = cx - Math.round(hw / 2), eR = cx + Math.round(hw / 2) - 1;
+    if (mode === 'blink') { rect(eL, cy, 2, 1, 'k'); rect(eR, cy, 2, 1, 'k'); }
+    else if (mode === 'happy') { set(eL - 1, cy, 'k'); set(eL, cy - 1, 'k'); set(eL + 1, cy, 'k'); set(eR, cy, 'k'); set(eR + 1, cy - 1, 'k'); set(eR + 2, cy, 'k'); }
+    else { rect(eL, cy - 1, 2, 3, 'k'); set(eL, cy - 1, 's'); rect(eR, cy - 1, 2, 3, 'k'); set(eR, cy - 1, 's'); }
+    set(cx, cy + 2, 'p');
+    if (mode === 'meow') { rect(cx - 1, cy + 3, 3, 2, 'm'); set(cx, cy + 4, 'p'); } else { set(cx - 1, cy + 3, 'o'); set(cx + 1, cy + 3, 'o'); }
+    rect(eL - 2, cy + 2, 2, 1, 'r'); rect(eR + 2, cy + 2, 2, 1, 'r');
+  }
+  function whiskers(cx, cy, hw, left) {
+    if (left) { rect(cx - hw - 3, cy + 1, 2, 1, 'o'); rect(cx - hw - 3, cy + 3, 2, 1, 'o'); }
+    rect(cx + hw + 2, cy + 1, 2, 1, 'o'); rect(cx + hw + 2, cy + 3, 2, 1, 'o');
+  }
+
+  /* ---- poses (facing right; the ground is row 23) ---- */
+  function sit(f, mode) {
+    var wag = f % 8 < 4;
+    rect(21, 20, 5, 2, 'b'); if (wag) { rect(25, 15, 2, 6, 'b'); rect(25, 14, 2, 1, 'd'); } else { rect(26, 16, 2, 5, 'b'); rect(27, 15, 2, 1, 'd'); }
+    ell(15, 17, 7, 5, 'b'); ell(15, 18, 3, 4, 'w');
+    rect(11, 21, 3, 2, 'w'); rect(16, 21, 3, 2, 'w');
+    ear(8, 1); ear(19, 1); ell(15, 9, 8, 7, 'b');
+    rect(12, 2, 1, 2, 'd'); rect(15, 2, 1, 3, 'd'); rect(18, 2, 1, 2, 'd');
+    face(15, 9, mode || (f % 22 < 2 ? 'blink' : 'open'), 8);
+    outline(); whiskers(15, 9, 8, true);
+  }
+  function body(legsA, tailUp) {
+    if (tailUp) { rect(1, 6, 2, 3, 'b'); rect(1, 5, 2, 1, 'd'); rect(2, 8, 2, 7, 'b'); } else { rect(3, 5, 2, 3, 'b'); rect(3, 4, 2, 1, 'd'); rect(2, 7, 2, 8, 'b'); }
+    ell(12, 15, 9, 5, 'b'); rect(7, 18, 11, 2, 'w');
+    rect(8, 11, 1, 3, 'd'); rect(11, 11, 1, 3, 'd'); rect(14, 11, 1, 3, 'd');
+    (legsA ? [5, 10, 14, 19] : [6, 9, 15, 18]).forEach(function (x) { rect(x, 19, 2, 4, 'b'); rect(x, 22, 2, 1, 'w'); });
+  }
   function walk(f) {
-    var a = f % 2;
-    px(1, 5, 1, 4, K.b); px(2, 8, 1, 1, K.b); px(a ? 0 : 2, 4, 1, 1, K.b);                 // tail
-    px(3, 7, 10, 4, K.b); px(5, 7, 1, 2, K.d); px(8, 7, 1, 2, K.d); px(11, 7, 1, 1, K.d); px(5, 10, 6, 1, K.w);   // body
-    head(12, 3, false);
-    var legs = a ? [3, 8, 9, 13] : [4, 7, 10, 12];
-    legs.forEach(function (x) { px(x, 11, 1, 2, K.b); px(x, 12, 1, 1, K.w); });
-  }
-  function head(x, y, closed, open) {
-    px(x, y, 6, 6, K.b); px(x, y - 2, 2, 2, K.b); px(x + 4, y - 2, 2, 2, K.b); px(x + 1, y - 1, 1, 1, K.p); px(x + 4, y - 1, 1, 1, K.p);
-    if (closed) { px(x + 1, y + 3, 2, 1, K.k); px(x + 4, y + 3, 1, 1, K.k); }
-    else { px(x + 2, y + 2, 1, 1, K.k); px(x + 5, y + 2, 1, 1, K.k); }
-    px(x + 4, y + 3, 1, 1, K.p);
-    if (open) px(x + 4, y + 4, 1, 1, K.k);
-  }
-  function sit(f, open) {
-    px(3, 12, 4, 1, K.b); px(3, 11, 1, 1, K.b);                                              // tail on the ground
-    px(6, 7, 7, 6, K.b); px(7, 8, 1, 2, K.d); px(10, 9, 2, 4, K.w);                          // body, chest
-    head(8, 2, f % 14 === 0, open);
-    px(10, 12, 1, 1, K.w); px(12, 12, 1, 1, K.w);
-  }
-  function sleep(f) {
-    px(2, 12, 4, 1, K.b); px(2, 11, 1, 1, K.b);
-    px(4, 9, 12, 4, K.b); if (f % 10 < 5) px(5, 8, 10, 1, K.b);
-    px(7, 9, 1, 2, K.d); px(10, 9, 1, 2, K.d);
-    px(12, 8, 6, 5, K.b); px(12, 7, 2, 1, K.b); px(16, 7, 2, 1, K.b); px(13, 10, 2, 1, K.k); px(16, 10, 1, 1, K.k); px(15, 11, 1, 1, K.p);
+    var a = f % 2 === 0;
+    body(a, a);
+    ear(17, 1); ear(24, 1); ell(22, 10, 6, 6, 'b'); rect(21, 4, 1, 2, 'd'); rect(23, 4, 1, 2, 'd');
+    face(22, 10, f % 22 < 2 ? 'blink' : 'open', 6);
+    outline(); whiskers(22, 10, 6, false);
   }
   function eat(f) {
-    var bob = f % 2;
-    px(1, 5, 1, 4, K.b); px(2, 8, 1, 1, K.b);
-    px(3, 7, 10, 4, K.b); px(5, 7, 1, 2, K.d); px(8, 7, 1, 2, K.d); px(5, 10, 6, 1, K.w);
-    [4, 7, 10, 12].forEach(function (x) { px(x, 11, 1, 2, K.b); px(x, 12, 1, 1, K.w); });
-    px(12, 6 + bob, 6, 5, K.b); px(12, 5 + bob, 2, 1, K.b); px(16, 5 + bob, 2, 1, K.b); px(15, 8 + bob, 1, 1, K.k);
-    px(15, 11, 5, 2, K.bowl); px(16, 10, 3, 1, K.food);
+    var bob = f % 4 < 2 ? 0 : 1;
+    body(false, false);
+    ear(17, 4 + bob); ear(24, 4 + bob); ell(22, 13 + bob, 6, 6, 'b'); rect(21, 7 + bob, 1, 2, 'd'); rect(23, 7 + bob, 1, 2, 'd');
+    face(22, 13 + bob, 'blink', 6);
+    rect(23, 20, 8, 3, 'u'); rect(23, 22, 8, 1, 'v'); rect(24, 19, 6, 1, 'f');
+    outline();
+  }
+  function sleep(f) {
+    var breath = f % 14 < 7;
+    rect(4, 20, 10, 2, 'b'); rect(13, 20, 2, 2, 'd');
+    ell(14, 17, 11, 5, 'b'); if (breath) rect(8, 11, 12, 1, 'b');
+    rect(7, 13, 1, 3, 'd'); rect(10, 12, 1, 3, 'd'); rect(13, 12, 1, 3, 'd');
+    ear(16, 8); ear(23, 8); ell(21, 16, 6, 5, 'b');
+    rect(18, 16, 2, 1, 'k'); rect(23, 16, 2, 1, 'k'); set(21, 18, 'p'); rect(16, 18, 2, 1, 'r'); rect(25, 18, 2, 1, 'r');
+    outline(); rect(29, 17, 2, 1, 'o'); rect(29, 19, 2, 1, 'o');
+  }
+  function compose(pose, f, mood) {
+    clear();
+    if (pose === 'walk') walk(f); else if (pose === 'sleep') sleep(f); else if (pose === 'eat') eat(f); else sit(f, pose === 'meow' ? (mood || 'meow') : mood);
+  }
+  function paint(c2, flip) {
+    c2.clearRect(0, 0, W, H);
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) { var c = g[y][x]; if (c) { c2.fillStyle = PAL[c]; c2.fillRect(flip ? W - 1 - x : x, y, 1, 1); } }
   }
   function draw() {
-    ctx.clearRect(0, 0, W, H);
-    ctx.save();
-    if (C.dir < 0) { ctx.translate(W, 0); ctx.scale(-1, 1); }
-    if (C.state === 'walk') walk(C.frame); else if (C.state === 'sleep') sleep(C.frame); else if (C.state === 'eat') eat(C.frame); else sit(C.frame, C.state === 'meow');
-    ctx.restore();
+    compose(C.state, C.frame, C.mood); paint(ctx, C.dir < 0);
     el.style.transform = 'translateX(' + Math.round(C.x) + 'px)';
   }
 
   /* ---- behaviour ---- */
-  function track() { return Math.max(80, host.clientWidth - 60); }
-  function set(state, ms) {
-    C.state = state; C.until = Date.now() + ms; C.frame = 0;
+  function track() { return Math.max(80, host.clientWidth - el.offsetWidth); }
+  function set2(state, ms, mood) {
+    C.state = state; C.until = Date.now() + ms; C.frame = 0; C.mood = mood || '';
     var z = el.querySelector('.cat-z');
     if (state === 'sleep' && !z) { z = document.createElement('span'); z.className = 'cat-z'; z.textContent = 'z'; el.appendChild(z); }
     if (state !== 'sleep' && z) z.remove();
   }
   function pick() {
     var r = Math.random();
-    if (reduced) { set(r < 0.5 ? 'sit' : 'sleep', 10000 + rnd(15000)); return; }
-    if (r < 0.46) { C.target = 8 + Math.random() * (track() - 16); C.dir = C.target > C.x ? 1 : -1; set('walk', 60000); }
-    else if (r < 0.62) set('sit', 2500 + rnd(4000));
-    else if (r < 0.8) set('sleep', 9000 + rnd(14000));
-    else if (r < 0.92) set('eat', 4200);
-    else { set('meow', 1500); say(['meow', 'mrrp', 'meow?'][rnd(3)], 1400); }
+    if (reduced) { set2(r < 0.5 ? 'sit' : 'sleep', 10000 + rnd(15000)); return; }
+    if (r < 0.46) { C.target = 8 + Math.random() * (track() - 16); C.dir = C.target > C.x ? 1 : -1; set2('walk', 60000); }
+    else if (r < 0.62) set2('sit', 2500 + rnd(4000));
+    else if (r < 0.8) set2('sleep', 9000 + rnd(14000));
+    else if (r < 0.92) set2('eat', 4200);
+    else { set2('meow', 1500); say(['meow', 'mrrp', 'meow?'][rnd(3)], 1400); }
   }
   function tick() {
     if (document.hidden || !el) return;
@@ -78,7 +115,7 @@
     if (C.x > track()) C.x = track();
     if (C.state === 'walk') {
       C.x += C.dir * 2.6;
-      if ((C.dir > 0 && C.x >= C.target) || (C.dir < 0 && C.x <= C.target)) { C.x = C.target; set('sit', 1800 + rnd(2500)); }
+      if ((C.dir > 0 && C.x >= C.target) || (C.dir < 0 && C.x <= C.target)) { C.x = C.target; set2('sit', 1800 + rnd(2500)); }
     } else if (Date.now() > C.until) pick();
     draw();
   }
@@ -97,18 +134,18 @@
     return ['purr', 'meow', 'all days filled', 'feed me', 'nice work'][rnd(5)];
   }
   function onTap() {
-    if (C.state === 'sleep') { set('sit', 3000); say('...mrow?', 1600); }
-    else { set('meow', 1800); say(tip(), 2600); }
+    if (C.state === 'sleep') { set2('sit', 3000); say('...mrow?', 1600); }
+    else { set2('meow', 1800); say(tip(), 2600); }
     draw();
   }
 
   var Cat = {};
   Cat.on = function () { return St.lsGet(KEY) !== '0'; };
   Cat.set = function (on) { St.lsSet(KEY, on ? '1' : '0'); Cat.init(); };
-  Cat.cheer = function () { if (!el) return; if (C.state === 'sleep') return; set('meow', 1500); say(['nice!', 'purr', 'saved'][rnd(3)], 1500); draw(); };
+  Cat.cheer = function () { if (!el || C.state === 'sleep') return; set2('meow', 1600, 'happy'); say(['nice!', 'purr', 'saved'][rnd(3)], 1500); draw(); };
   Cat.say = say;
-  /* Draw one pose onto any 20×14 canvas (used by the payday quest on Home). */
-  Cat.sprite = function (canvas, pose, f) { var old = ctx; ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, W, H); if (pose === 'sit') sit(f || 1, true); else walk(f || 0); ctx = old; };
+  /* Draw one pose onto any 32×24 canvas (used by the payday quest on Home). */
+  Cat.sprite = function (canvas, pose, f, mood) { compose(pose, f || 0, mood); paint(canvas.getContext('2d'), false); };
   Cat.init = function () {
     host = document.getElementById('cat'); if (!host) return;
     clearInterval(timer); timer = null; host.innerHTML = ''; el = null;
@@ -118,7 +155,7 @@
     var cv = document.createElement('canvas'); cv.width = W; cv.height = H; el.appendChild(cv); ctx = cv.getContext('2d');
     host.appendChild(el);
     el.addEventListener('click', onTap);
-    C.x = Math.min(track(), 24 + rnd(60)); set('sit', 2500); draw();
+    C.x = Math.min(track(), 24 + rnd(60)); set2('sit', 2500); draw();
     timer = setInterval(tick, 150);
   };
   Ga.cat = Cat;
