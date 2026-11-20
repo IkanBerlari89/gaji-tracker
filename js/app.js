@@ -86,6 +86,17 @@
   /* ---- daily tracker ---- */
   A.parseIso = function (s) { return { y: +s.slice(0, 4), m: +s.slice(5, 7), d: +s.slice(8, 10), ym: s.slice(0, 7) }; };
   A.shiftIso = function (s, k) { var p = A.parseIso(s), d = new Date(p.y, p.m - 1, p.d + k); return U.iso(d.getFullYear(), d.getMonth() + 1, d.getDate()); };
+  /* One tap on a clock-out chip saves the tracked day. Filling a missed day moves on to the next missed one. */
+  A.trkQuick = function (UI, q) {
+    var S = St.S, p = A.parseIso(UI.trackDate), e = (S.months[p.ym] || {})[U.pad(p.d)];
+    if (e && e.real) { Ga.toast('From the time card · locked. Tap View to unlock it.'); return; }
+    var ent = q.indexOf('t:') === 0 ? { k: 'W', out: q.slice(2) } : { k: q }, wasMiss = Ga.missing().indexOf(UI.trackDate) >= 0;
+    A.setDay(p.ym, p.d, ent, 'Tracker ' + UI.trackDate + ' ' + (ent.out || ent.k));
+    var miss = Ga.missing(), next = wasMiss ? (miss.filter(function (k) { return k > UI.trackDate; })[0] || miss[0]) : null;
+    Ga.toast('Saved ' + p.d + ' ' + U.MON3[p.m - 1] + ' · ' + (ent.out || ent.k) + (next ? ' · next: ' + (+next.slice(8, 10)) + ' ' + U.MON3[+next.slice(5, 7) - 1] : wasMiss ? ' · all days filled' : ''));
+    if (next) UI.trackDate = next;
+    Ga.render();
+  };
   A.trkSave = function (UI) {
     var S = St.S, p = A.parseIso(UI.trackDate), e = (S.months[p.ym] || {})[U.pad(p.d)], ty = U.dayType(p.y, p.m, p.d);
     var isReal = !!(e && e.real);
@@ -151,6 +162,8 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') Ga.closeLayer(); });
   document.getElementById('main').addEventListener('click', function (e) {
     if (e.target.closest('summary') && e.target.closest('#tgDet')) { UI.rulesOpen = !document.getElementById('tgDet').open; return; }
+    if (e.target.closest('summary') && e.target.closest('#heroDet')) { UI.heroOpen = !document.getElementById('heroDet').open; return; }
+    if (e.target.closest('summary') && e.target.closest('#slipsDet')) { UI.slipsOpen = !document.getElementById('slipsDet').open; return; }
     if (e.target.closest('summary') && e.target.closest('#tgOuter')) { UI.targetOpen = !document.getElementById('tgOuter').open; return; }
     if (e.target.closest('summary') && e.target.closest('#plFillDet')) { UI.plFillOpen = !document.getElementById('plFillDet').open; return; }
     if (e.target.closest('summary') && e.target.closest('#cmpDet')) { UI.cmpOpen = !document.getElementById('cmpDet').open; return; }
@@ -161,7 +174,9 @@
     else if (ds.otScope) { UI.otScope = ds.otScope; Ga.render(); }
     else if (ds.trk) { var t1 = U.today(), tI = U.iso(t1.y, t1.m, t1.d), nd = ds.trk === 'today' ? tI : A.shiftIso(UI.trackDate, +ds.trk); if (nd > tI) { Ga.toast('The tracker stops at today. Use Plan for days ahead.'); return; } UI.trackDate = nd; UI.trkType = null; UI.trkOut = null; UI.trkUnlocked = null; UI.trkConfirm = null; Ga.render(); }
     else if (ds.jump) { UI.trackDate = ds.jump; UI.trkType = null; UI.trkOut = null; UI.trkUnlocked = null; UI.trkConfirm = null; Ga.go('home'); }
-    else if (ds.trkq != null) { var q = ds.trkq; if (q.indexOf('t:') === 0) { UI.trkType = 'W'; UI.trkOut = q.slice(2); } else UI.trkType = q; Ga.render(); }
+    else if (ds.trkq != null) A.trkQuick(UI, ds.trkq);
+    else if (ds.act === 'trkOther') { var po = A.parseIso(UI.trackDate); A.openDay(UI, po.d, po.ym); }
+    else if (ds.act === 'trkPick') { var di = document.getElementById('trkDate'); try { di.showPicker(); } catch (err) { di.focus(); } }
     else if (ds.act === 'trkSave') A.trkSave(UI);
     else if (ds.act === 'trkUnlock') { UI.trkConfirm = UI.trackDate; Ga.render(); }
     else if (ds.act === 'trkUnlockYes') { UI.trkUnlocked = UI.trackDate; UI.trkConfirm = null; UI.trkType = null; UI.trkOut = null; Ga.render(); }

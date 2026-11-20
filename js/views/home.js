@@ -1,8 +1,8 @@
-/* Home: hero estimate, today quick-log, stat tiles, trend charts, payslip list. */
+/* Home: one number (predicted pay), a one-tap daily tracker, one chart. Everything else sits behind Details or a fold. */
 (function (G) {
   'use strict';
   var Ga = G.Gaji, U = Ga.U, R = Ga.R, St = Ga.St;
-  var fm = U.fm, fh = U.fh, pad = U.pad, esc = U.esc, MON3 = U.MON3, MONTHS = U.MONTHS;
+  var fm = U.fm, fh = U.fh, fh1 = U.fh1, pad = U.pad, esc = U.esc, MON3 = U.MON3, MONTHS = U.MONTHS;
   var V = Ga.V = Ga.V || {};
   var IC = function () { return Ga.IC; };
 
@@ -10,111 +10,89 @@
     var p = U.parseYm(cp.ym), t = U.today(), d;
     if (cp.h === 1) d = new Date(p.y, p.m - 1, 20); else d = new Date(p.y, p.m, 5);
     var days = Math.round((d - new Date(t.y, t.m - 1, t.d)) / 864e5);
-    return { label: d.getDate() + ' ' + MON3[d.getMonth()], days: days, approx: true };
+    return { label: d.getDate() + ' ' + MON3[d.getMonth()], days: days };
   }
   function daysLeft(cp) { var p = U.parseYm(cp.ym), t = U.today(), end = cp.h === 1 ? 15 : U.daysIn(p.y, p.m), n = 0; for (var d = t.d; d <= end; d++) if (U.dayType(p.y, p.m, d) !== 'SU') n++; return n; }
   function parseIso(s) { return { y: +s.slice(0, 4), m: +s.slice(5, 7), d: +s.slice(8, 10), ym: s.slice(0, 7) }; }
-  function shiftIso(s, k) { var p = parseIso(s), d = new Date(p.y, p.m - 1, p.d + k); return U.iso(d.getFullYear(), d.getMonth() + 1, d.getDate()); }
-  function niceDate(s) { var p = parseIso(s); return U.DOWL[new Date(p.y, p.m - 1, p.d).getDay()] + ', ' + p.d + ' ' + MON3[p.m - 1] + ' ' + p.y; }
+  function shortDate(s) { var p = parseIso(s); return U.DOW3[new Date(p.y, p.m - 1, p.d).getDay()] + ' ' + p.d + ' ' + MON3[p.m - 1]; }
+  function niceDate(s) { var p = parseIso(s); return U.DOW3[new Date(p.y, p.m - 1, p.d).getDay()] + ', ' + p.d + ' ' + MON3[p.m - 1] + ' ' + p.y; }
   Ga.trackFrom = function () { var tf = St.S.settings.trackFrom; if (/^\d{4}-\d{2}-\d{2}$/.test(tf || '')) return tf; var t = U.today(); return U.iso(t.y, t.m, 1); };
   Ga.missing = function () { return R.missingDays(Ga.trackFrom(), R.yesterdayIso()); };
 
   V.home = function (UI) {
-    var S = St.S, t = U.today(), todayIso = U.iso(t.y, t.m, t.d);
-    if (!UI.trackDate) UI.trackDate = todayIso;
-    if (UI.trackDate > todayIso) UI.trackDate = todayIso;
-    var td = parseIso(UI.trackDate), cp = { ym: td.ym, h: td.d <= 15 ? 1 : 2 }, M = R.assumedMoney(cp.ym), H = M.H, hh = H[cp.h], as = S.settings.assume || R.DEFAULT_ASSUME;
-    var half = cp.h === 1 ? M.half1 : M.half2, rec = S.records[cp.ym + '-' + cp.h], y = td.y, miss = Ga.missing();
-    var h = '<div class="home"><div class="col">';
-    // hero: predicted payslip for the half of the tracked date, month total underneath
-    h += '<section class="hero" aria-label="Predicted payslip"><span class="eyebrow">Predicted payslip · ' + U.periodName(cp.ym, cp.h) + '</span>' +
-      '<div class="hero-amt"><small>RM</small>' + fm(half) + '</div>' +
-      '<div class="hero-sub">Month ' + MONTHS[td.m - 1] + ' ' + y + ': <b style="color:var(--hero-ink)">RM' + fm(M.net) + '</b> · 1st half ' + fm(M.half1) + ' + 2nd half ' + fm(M.half2) + (rec && rec.payslip && rec.payslip.net != null ? ' · actual payslip RM' + fm(rec.payslip.net) : '') + '</div>' +
-      '<div class="hero-sub" style="margin-top:4px">' + (cp.h === 1 ? '1st half has no deductions.' : 'EPF, SOCSO, EIS' + (S.settings.skbbk ? ', SKBBK' : '') + ' (RM' + fm(M.ded) + ') come off this half.') + (miss.length ? ' <b style="color:var(--amber-strong)">' + miss.length + ' past day' + (miss.length === 1 ? '' : 's') + ' not filled</b>: counted with no OT until you fill them.' : '') + '</div>' +
-      '<div class="hero-sub assume" style="margin-top:10px">Days ahead assumed: weekday out <select id="asWk" aria-label="Assumed weekday clock-out">' + ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00'].map(function (x) { return '<option value="' + x + '"' + (x === as.wk ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select> · Saturday out <select id="asSa" aria-label="Assumed Saturday clock-out">' + ['11:30', '12:30', '13:00', '15:00', '16:30', '17:00'].map(function (x) { return '<option value="' + x + '"' + (x === as.sa ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div></section>';
-    h += trackerCard(UI, todayIso, miss);
-    if (miss.length) h += missingCard(miss);
-    h += otCard(UI, cp, M, H);
-    var pay = nextPayday(cp), al = R.alLeft(y);
-    h += '<div class="tiles">' +
-      '<div class="tile"><div class="eyebrow">Next payday</div><div class="v">~' + pay.label + '</div><div class="s">' + (pay.days > 0 ? 'in ' + pay.days + ' day' + (pay.days === 1 ? '' : 's') : pay.days === 0 ? 'today' : 'passed') + ' · ' + U.halfLabel(cp.h) + '</div></div>' +
-      '<div class="tile"><div class="eyebrow">Work days left</div><div class="v">' + daysLeft(U.currentPeriod()) + '</div><div class="s">in the current half</div></div>' +
-      '<button class="tile" data-go="cal"><div class="eyebrow">Annual leave ' + y + '</div><div class="v" style="color:var(--' + (al === null ? 'ink' : al <= 0 ? 'bad' : al <= 2 ? 'amber' : 'good') + ')">' + (al === null ? '—' : al + ' left') + '</div><div class="s">' + (al !== null && al <= 0 ? 'AL now counts as unpaid' : 'of ' + S.settings.alQuota + ' a year') + '</div></button>' +
-      '<div class="tile"><div class="eyebrow">Unpaid · ' + MON3[td.m - 1] + '</div><div class="v">' + (M.up ? '−RM' + fm(M.u1 + M.u2) : 'none') + '</div><div class="s">' + (M.up ? M.up + ' day' + (M.up === 1 ? '' : 's') + ' at RM' + fm(M.r.unpaid) : 'no unpaid days this month') + '</div></div></div>';
-    h += '<div class="row"><button class="btn primary" data-go="cal" style="flex:1">' + IC().cal + 'Calendar</button><button class="btn" data-go="imp" style="flex:1">' + IC().imp + 'Import</button></div>';
-    h += '</div><div class="col">';
-    h += trendCard(UI);
-    h += slipsCard();
-    h += '</div></div>';
-    return h;
+    var t = U.today(), todayIso = U.iso(t.y, t.m, t.d);
+    if (!UI.trackDate || UI.trackDate > todayIso) UI.trackDate = todayIso;
+    var td = parseIso(UI.trackDate), cp = { ym: td.ym, h: td.d <= 15 ? 1 : 2 }, M = R.assumedMoney(cp.ym), miss = Ga.missing();
+    return '<div class="home"><div class="col">' + hero(UI, cp, M, td) + trackerCard(UI, todayIso, miss) + '</div><div class="col">' + trendCard(UI) + slipsFold(UI) + '</div></div>';
   };
 
-  /* Daily tracker: pick a date, set what happened, save. */
+  /* Hero: the predicted payslip for the half of the tracked date. Three supporting numbers; the breakdown is behind Details. */
+  function hero(UI, cp, M, td) {
+    var S = St.S, H = M.H, hh = H[cp.h], half = cp.h === 1 ? M.half1 : M.half2, rec = S.records[cp.ym + '-' + cp.h], as = S.settings.assume || R.DEFAULT_ASSUME;
+    var pay = nextPayday(cp), otH = hh.ot + hh.ot2, upRm = cp.h === 1 ? M.u1 : M.u2, al = R.alLeft(td.y), mon = MONTHS[td.m - 1];
+    var h = '<section class="hero" aria-label="Predicted payslip"><span class="eyebrow">Predicted pay · ' + U.periodName(cp.ym, cp.h) + '</span>' +
+      '<div class="hero-amt"><small>RM</small>' + fm(half) + '</div>' +
+      '<div class="hero-sub">' + mon + ' total <b>RM' + fm(M.net) + '</b></div>' +
+      '<div class="hero-row three"><div><span>Overtime</span><b>' + fh1(otH) + ' h</b></div><div><span>Unpaid</span><b>' + (hh.up ? hh.up + ' d' : 'none') + '</b></div><div><span>Payday</span><b>~' + pay.label + '</b></div></div>';
+    var kv = function (a, b, cls) { return '<dt' + (cls ? ' class="' + cls + '"' : '') + '>' + a + '</dt><dd' + (cls ? ' class="' + cls + '"' : '') + '>' + b + '</dd>'; };
+    h += '<details class="hero-det" id="heroDet"' + (UI.heroOpen ? ' open' : '') + '><summary>Details</summary><dl class="kv">' +
+      kv('Basic · ' + U.halfLabel(cp.h), fm(M.r.basic / 2)) +
+      kv('OT 1.5× · ' + fh(hh.ot) + ' h', '+' + fm(cp.h === 1 ? M.o1 : M.o2)) +
+      (hh.ot2 ? kv('OT 2× · ' + fh(hh.ot2) + ' h', '+' + fm(cp.h === 1 ? M.x1 : M.x2)) : '') +
+      (hh.up ? kv('Unpaid · ' + hh.up + ' d', '−' + fm(upRm)) : '') +
+      (cp.h === 2 ? kv('EPF ' + fm(M.epf) + ' · SOCSO ' + fm(M.socso) + ' · EIS ' + fm(M.eis) + (M.skbbk ? ' · SKBBK ' + fm(M.skbbk) : ''), '−' + fm(M.ded)) : kv('Deductions', 'all on the 2nd half')) +
+      '<div class="sep"></div>' + kv('1st half', fm(M.half1)) + kv('2nd half', fm(M.half2)) + kv(mon + ' total', fm(M.net), 'big') +
+      (rec && rec.payslip && rec.payslip.net != null ? kv('Actual payslip · ' + U.halfLabel(cp.h), fm(rec.payslip.net)) : '') +
+      '<div class="sep"></div>' + kv('Payday', '~' + pay.label + (pay.days > 0 ? ' · in ' + pay.days + ' d' : pay.days === 0 ? ' · today' : '')) +
+      kv('Work days left this half', daysLeft(U.currentPeriod())) + kv('Annual leave left ' + td.y, al === null ? '—' : al) + '</dl>' +
+      '<div class="assume">Days ahead counted as weekday out <select id="asWk" aria-label="Assumed weekday clock-out">' + ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00'].map(function (x) { return '<option value="' + x + '"' + (x === as.wk ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>, Saturday out <select id="asSa" aria-label="Assumed Saturday clock-out">' + ['11:30', '12:30', '13:00', '15:00', '16:30', '17:00'].map(function (x) { return '<option value="' + x + '"' + (x === as.sa ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div></details>';
+    return h + '</section>';
+  }
+
+  /* Daily tracker: one tap on a clock-out saves the day. Anything else (leave, unpaid, exact time, unlock) is behind Other. */
   function trackerCard(UI, todayIso, miss) {
-    var S = St.S, iso = UI.trackDate, p = parseIso(iso), e = (S.months[p.ym] || {})[pad(p.d)], c = R.dayCalc(p.ym, p.d, e), ty = c.t, isToday = iso === todayIso, isReal = !!(e && e.real), locked = isReal && UI.trkUnlocked !== iso;
-    var type = UI.trkType != null ? UI.trkType : (e ? (e.k === 'W' ? 'W' : e.k) : ''), out = UI.trkOut || (e && e.out) || (ty === 'SA' ? '13:00' : '18:00');
-    var ent = type === '' ? null : type === 'W' ? { k: 'W', out: out } : { k: type };
-    if (ent && e && e.real && type === e.k && (type !== 'W' || out === e.out)) ent = e;
-    var cc = R.dayCalc(p.ym, p.d, ent), isMiss = miss.indexOf(iso) >= 0, dirty = JSON.stringify(ent ? { k: ent.k, out: ent.out || null } : null) !== JSON.stringify(e ? { k: e.k, out: e.out || null } : null);
-    var times = ty === 'SA' ? ['11:30', '12:30', '13:00', '15:00', '16:30', '17:00'] : ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30'];
-    var h = '<section class="card trk"><div class="card-h" style="margin-bottom:10px"><div><div class="eyebrow">Daily tracker' + (isToday ? ' · today' : '') + (c.ph ? ' · ' + esc(c.ph) : '') + '</div><h2>' + niceDate(iso) + '</h2></div>' +
-      '<span class="chip ' + (e ? (e.k === 'W' ? 'good' : 'blue') : isMiss ? 'bad' : '') + '">' + (e ? (e.k === 'W' ? 'Saved · out ' + esc(e.out) : 'Saved · ' + (U.LEAVES[e.k] || e.k)) : isMiss ? 'Not filled' : ty === 'SU' ? 'Sunday' : 'Empty') + '</span></div>';
-    h += '<div class="row trk-nav"><button class="icon-btn" data-trk="-1" aria-label="Previous day">' + IC().left + '</button><input type="date" id="trkDate" value="' + iso + '" max="' + todayIso + '" aria-label="Pick a date" style="flex:1;min-width:0"><button class="icon-btn" data-trk="1" aria-label="Next day"' + (isToday ? ' disabled' : '') + '>' + IC().right + '</button>' + (isToday ? '' : '<button class="btn sm" data-trk="today">Today</button>') + '</div>';
-    h += '<div class="row" style="margin-top:10px"><div class="field"><label for="trkType">What happened</label><select id="trkType"><option value=""' + (type === '' ? ' selected' : '') + '>Not set' + (ty === 'SU' ? ' · rest day' : ' · counts as normal day') + '</option><option value="W"' + (type === 'W' ? ' selected' : '') + '>Worked · clock-out time</option>' +
-      Object.keys(U.LEAVES).map(function (k) { return '<option value="' + k + '"' + (type === k ? ' selected' : '') + '>' + U.LEAVES[k] + '</option>'; }).join('') + '</select></div>' +
-      '<div class="field" style="max-width:140px"><label for="trkOut">Clock out</label><input id="trkOut" type="time" value="' + esc(out) + '"' + (type === 'W' && !locked ? '' : ' disabled') + '></div></div>';
-    if (locked) h = h.replace('<select id="trkType">', '<select id="trkType" disabled>');
-    if (locked) h += '';
-    else if (ty !== 'SU' || c.ph) h += '<div class="quick" style="margin-top:8px">' + times.map(function (x) { return '<button data-trkq="t:' + x + '" aria-pressed="' + (type === 'W' && out === x) + '">' + x + '</button>'; }).join('') + ['AL', 'MC', 'OFF', 'UPH', 'UPL'].map(function (k) { return '<button class="lv" data-trkq="' + k + '" aria-pressed="' + (type === k) + '">' + k + '</button>'; }).join('') + '</div>';
-    else h += '<div class="quick" style="margin-top:8px"><button data-trkq="X2" aria-pressed="' + (type === 'X2') + '">Worked (2×)</button></div>';
-    if (type === 'AL' && R.alLeft(p.y) !== null && R.alLeft(p.y) <= 0 && iso >= S.settings.alAsOf) h += '<div class="note warn" style="margin-top:8px">AL balance for ' + p.y + ' is 0. This AL counts as unpaid (−RM' + fm(R.rates(p.ym).unpaid) + ').</div>';
-    h += '<dl class="kv" style="margin-top:10px"><dt>OT 1.5×</dt><dd>' + fh(cc.ot) + ' h · RM' + fm(cc.otAmt) + '</dd>' + (cc.ot2 ? '<dt>OT 2×</dt><dd>' + fh(cc.ot2) + ' h · RM' + fm(cc.x2Amt) + '</dd>' : '') + (cc.up ? '<dt>Unpaid</dt><dd>−RM' + fm(cc.upAmt) + '</dd>' : '') + '<dt>Paid hours</dt><dd>' + (cc.paid != null ? fh(cc.paid) + (cc.est ? ' (est.)' : '') : '—') + '</dd><div class="sep"></div><dt>Day total</dt><dd class="big">RM' + fm(cc.total) + '</dd></dl>';
-    if (cc.nr) h += '<p class="tiny muted" style="margin-top:4px">NR shows on the time card from 19:00. The money is the OT hours.</p>';
-    if (locked) {
-      h += '<div class="note good" style="margin-top:8px"><b>Locked.</b> From the time card (in ' + esc(e['in'] || '—') + ', out ' + esc(e.out || '—') + ', paid ' + (e.paid != null ? fh(e.paid) : '—') + 'h)' + (e.edited ? ', edited by hand' : '') + '.</div>';
-      h += UI.trkConfirm === iso ? '<div class="note warn" style="margin-top:8px"><b>Unlock ' + p.d + ' ' + MON3[p.m - 1] + '?</b> Only if the AI misread the time card. It locks again when you save.</div><div class="row" style="margin-top:8px"><button class="btn danger" data-act="trkUnlockYes" style="flex:1">Yes, unlock</button><button class="btn" data-act="trkUnlockNo">Cancel</button></div>' : '<div class="row" style="margin-top:10px"><button class="btn ghost" data-act="trkUnlock">' + IC().lock + ' Unlock to correct</button></div>';
-    } else {
-      if (isReal) h += '<div class="note warn" style="margin-top:8px">Unlocked. Time card said in ' + esc(e['in'] || '—') + ', out ' + esc(e.out || '—') + '. Change what happened, then Save; it locks again.</div>';
-      h += '<div class="row" style="margin-top:12px"><button class="btn primary" data-act="trkSave" style="flex:1"' + (dirty ? '' : ' disabled') + '>' + (dirty ? 'Save ' + p.d + ' ' + MON3[p.m - 1] : 'Saved') + '</button>' + (e && !isReal ? '<button class="btn" data-act="trkClear">Clear day</button>' : isReal ? '<button class="btn" data-act="trkUnlockNo">Cancel</button>' : '') + '</div>';
+    var S = St.S, iso = UI.trackDate, p = parseIso(iso), e = (S.months[p.ym] || {})[pad(p.d)], c = R.dayCalc(p.ym, p.d, e), ty = c.t, isToday = iso === todayIso, isReal = !!(e && e.real), isMiss = miss.indexOf(iso) >= 0;
+    var rest = ty === 'SU' || !!c.ph, times = rest ? [] : ty === 'SA' ? ['11:30', '12:30', '13:00', '15:00', '17:00'] : ['17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+    var cur = e && e.k === 'W' && U.tmin(e.out) != null ? U.mtime(U.tmin(e.out) - U.tmin(e.out) % 30) : null, status, tone = '';
+    if (!e) { status = rest ? (c.ph ? esc(c.ph) : 'Sunday') + ' · rest day' : 'Not filled yet'; tone = isMiss ? ' bad' : ''; }
+    else if (e.k === 'W' || e.k === 'X2') { status = (e.out ? 'Out ' + esc(e.out) : 'Worked') + (c.ot2 ? ' · ' + c.ot2 + ' h at 2×' : c.ot ? ' · OT ' + fh1(c.ot) + ' h' : c.half ? ' · half day' : c.early ? ' · left early' : ' · on time'); tone = ' good'; }
+    else { status = c.over ? 'Annual leave · no balance, unpaid' : (U.LEAVES[e.k] || e.k); tone = c.up ? ' bad' : ' blue'; }
+    var h = '<section class="card trk"><div class="trk-head"><button class="icon-btn" data-trk="-1" aria-label="Previous day">' + IC().left + '</button>' +
+      '<button class="trk-date" data-act="trkPick" aria-label="Pick a date"><span class="eyebrow">' + (isToday ? 'Today' : 'Daily tracker') + '</span><b>' + niceDate(iso) + '</b></button>' +
+      '<input type="date" id="trkDate" class="trk-pick" value="' + iso + '" max="' + todayIso + '" tabindex="-1" aria-hidden="true">' +
+      '<button class="icon-btn" data-trk="1" aria-label="Next day"' + (isToday ? ' disabled' : '') + '>' + IC().right + '</button></div>';
+    h += '<div class="trk-status"><span class="st' + tone + '">' + status + (isReal ? ' · time card' : '') + '</span>' + (e ? '<b>RM' + fm(c.total) + '</b>' : '') + '</div>';
+    h += '<div class="chips">' + (rest ? '<button data-trkq="X2" aria-pressed="' + (!!e && (e.k === 'X2' || e.k === 'W')) + '"' + (isReal ? ' disabled' : '') + '>Worked 2×</button>' :
+      times.map(function (x) { return '<button data-trkq="t:' + x + '" aria-pressed="' + (cur === x) + '"' + (isReal ? ' disabled' : '') + '>' + x + '</button>'; }).join('')) +
+      '<button class="other" data-act="trkOther">' + (isReal ? 'View' : 'Other') + '</button></div>';
+    h += '<p class="tiny muted trk-hint">' + (isReal ? 'From the time card and locked. View lets you unlock it.' : 'Tap your clock-out to save. Other: leave, unpaid, exact time.') + (isToday ? '' : ' <button class="link" data-trk="today">Back to today</button>') + '</p>';
+    if (miss.length) {
+      var show = miss.slice(0, 6);
+      h += '<div class="trk-miss"><b>' + miss.length + ' day' + (miss.length === 1 ? '' : 's') + ' not filled</b><div class="quick">' + show.map(function (s) { return '<button data-jump="' + s + '" aria-pressed="' + (s === iso) + '">' + shortDate(s) + '</button>'; }).join('') + (miss.length > show.length ? '<span class="chip">+' + (miss.length - show.length) + '</span>' : '') + '</div></div>';
     }
     return h + '</section>';
   }
-  function missingCard(miss) {
-    var show = miss.slice(0, 12);
-    return '<section class="card" style="border-color:var(--bad)"><div class="card-h" style="margin-bottom:8px"><div><div class="eyebrow" style="color:var(--bad)">Not filled yet</div><h2>' + miss.length + ' day' + (miss.length === 1 ? '' : 's') + ' missing since ' + (function (s) { var p = parseIso(s); return p.d + ' ' + MON3[p.m - 1]; })(Ga.trackFrom()) + '</h2></div><span class="chip bad">tap to fill</span></div>' +
-      '<div class="quick">' + show.map(function (s) { var p = parseIso(s); return '<button class="lv" data-jump="' + s + '" style="border-color:var(--bad);color:var(--bad)">' + U.DOW3[new Date(p.y, p.m - 1, p.d).getDay()] + ' ' + p.d + ' ' + MON3[p.m - 1] + '</button>'; }).join('') + (miss.length > show.length ? '<span class="chip">+' + (miss.length - show.length) + ' more</span>' : '') + '</div>' +
-      '<p class="tiny muted" style="margin-top:8px">An empty weekday is counted as a normal day with no OT until you fill it. These days are also outlined in red on the Calendar. Change the start date in More → Settings.</p></section>';
-  }
-  function otCard(UI, cp, M, H) {
-    var isHalf = UI.otScope !== 'month', hh = H[cp.h], ot = isHalf ? hh.ot : M.ot, ot2 = isHalf ? hh.ot2 : M.ot2, otRm = isHalf ? (cp.h === 1 ? M.o1 + M.x1 : M.o2 + M.x2) : M.o1 + M.o2 + M.x1 + M.x2;
-    return '<section class="card"><div class="card-h" style="margin-bottom:8px"><h2>Overtime · ' + (isHalf ? U.periodName(cp.ym, cp.h) : MONTHS[U.parseYm(cp.ym).m - 1] + ' ' + U.parseYm(cp.ym).y) + '</h2><div class="seg"><button data-ot-scope="half" aria-pressed="' + isHalf + '">Half</button><button data-ot-scope="month" aria-pressed="' + !isHalf + '">Month</button></div></div>' +
-      '<div class="tiles"><div class="tile" style="box-shadow:none"><div class="eyebrow">OT 1.5×</div><div class="v">' + fh(ot) + 'h</div><div class="s">RM' + fm(ot * M.r.r15) + ' at RM' + fm(M.r.r15) + '/h</div></div>' +
-      '<div class="tile" style="box-shadow:none"><div class="eyebrow">OT 2× (Sun / PH)</div><div class="v">' + fh(ot2) + 'h</div><div class="s">RM' + fm(ot2 * M.r.r20) + ' at RM' + fm(M.r.r20) + '/h</div></div>' +
-      '<div class="tile" style="box-shadow:none"><div class="eyebrow">OT pay</div><div class="v">RM' + fm(otRm) + '</div><div class="s">on top of basic RM' + fm(M.r.basic / (isHalf ? 2 : 1)) + '</div></div>' +
-      '<div class="tile" style="box-shadow:none"><div class="eyebrow">NR days</div><div class="v">' + (isHalf ? hh.nr : M.nr) + '</div><div class="s">clock-out 19:00 or later</div></div></div></section>';
-  }
 
-  /* Trend: net and OT, by half (last 8) or by month (last 8). One axis each, hover tooltip. */
+  /* Trend: net pay by half (last 8) or by month (last 8). One axis, value on every bar, hover tooltip. */
   function series(byMonth) {
     var S = St.S, cp = U.currentPeriod(), out = [], ym = U.addYm(cp.ym, byMonth ? -7 : -4), end = cp.ym;
     for (; ym <= end; ym = U.addYm(ym, 1)) {
-      var M = R.monthMoney(ym), H = R.halves(ym), r1 = S.records[ym + '-1'], r2 = S.records[ym + '-2'], q = U.parseYm(ym);
+      var M = R.monthMoney(ym), r1 = S.records[ym + '-1'], r2 = S.records[ym + '-2'], q = U.parseYm(ym);
       var n1 = r1 && r1.payslip && r1.payslip.net != null ? r1.payslip.net : null, n2 = r2 && r2.payslip && r2.payslip.net != null ? r2.payslip.net : null;
       if (byMonth) {
-        var o1 = r1 && r1.payslip && r1.payslip.ot15_hours != null ? r1.payslip.ot15_hours : null, o2 = r2 && r2.payslip && r2.payslip.ot15_hours != null ? r2.payslip.ot15_hours : null;
-        out.push({ ym: ym, h: 0, key: ym, label: MON3[q.m - 1] + (q.m === 1 ? ' ' + String(q.y).slice(2) : ''), name: U.MONTHS[q.m - 1] + ' ' + q.y, est: M.net, act: n1 != null && n2 != null ? n1 + n2 : null, partial: (n1 != null) !== (n2 != null), ot: M.ot + M.ot2, otRec: o1 != null || o2 != null ? (o1 || 0) + (o2 || 0) : null, current: ym === cp.ym });
+        out.push({ ym: ym, key: ym, label: MON3[q.m - 1] + (q.m === 1 ? ' ' + String(q.y).slice(2) : ''), name: MONTHS[q.m - 1] + ' ' + q.y, est: M.net, act: n1 != null && n2 != null ? n1 + n2 : null, partial: (n1 != null) !== (n2 != null), current: ym === cp.ym });
       } else {
         [1, 2].forEach(function (hf) {
           if (ym === end && hf > cp.h) return;
-          var rec = hf === 1 ? r1 : r2, act = hf === 1 ? n1 : n2;
-          out.push({ ym: ym, h: hf, key: ym + '-' + hf, label: MON3[q.m - 1] + ' H' + hf, name: U.periodName(ym, hf), est: hf === 1 ? M.half1 : M.half2, act: act, ot: H[hf].ot + H[hf].ot2, otRec: rec && rec.payslip && rec.payslip.ot15_hours != null ? rec.payslip.ot15_hours : null, current: ym === cp.ym && hf === cp.h });
+          out.push({ ym: ym, key: ym + '-' + hf, label: MON3[q.m - 1] + ' H' + hf, name: U.periodName(ym, hf), est: hf === 1 ? M.half1 : M.half2, act: hf === 1 ? n1 : n2, current: ym === cp.ym && hf === cp.h });
         });
       }
     }
     return out.slice(-8);
   }
+  function narrowScreen() { return G.innerWidth < 600; }
   function bars(pts, opt) {
-    var narrow = G.innerWidth < 600, W = narrow ? 380 : 640, Hh = opt.h || (narrow ? 150 : 170), padL = 36, padB = 24, padT = 12, max = 0;
+    var narrow = narrowScreen(), W = narrow ? 380 : 640, Hh = narrow ? 170 : 200, padL = 36, padB = 24, padT = 16, max = 0;
     pts.forEach(function (p) { opt.vals(p).forEach(function (v) { if (v != null && v > max) max = v; }); });
     if (!max) max = 1;
     var step = opt.step(max), top = Math.ceil(max / step) * step, slot = (W - padL - 6) / pts.length, ns = opt.n;
@@ -127,53 +105,50 @@
         if (v == null) return;
         var x = start + k * (bw + gap), yy = y(v), hgt = Math.max(0, y0 - yy);
         s += '<path d="M' + x + ' ' + y0 + ' v-' + Math.max(0, hgt - 4) + ' a4 4 0 0 1 4 -4 h' + (bw - 8) + ' a4 4 0 0 1 4 4 v' + Math.max(0, hgt - 4) + ' z" fill="var(--c' + (k + 1) + ')"' + (p.current && k === 0 ? ' opacity=".55"' : '') + '/>';
+        s += '<text class="lbl' + (ns > 1 ? ' sm' : '') + '" x="' + (x + bw / 2) + '" y="' + (yy - 4) + '" text-anchor="middle">' + opt.lab(v) + '</text>';
       });
-      vals.forEach(function (v, k) { if (v == null) return; var x = start + k * (bw + gap) + bw / 2, vl = opt.lab(v); s += '<text class="lbl' + (ns > 1 ? ' sm' : '') + '" x="' + x + '" y="' + (y(v) - 4) + '" text-anchor="middle">' + vl + '</text>'; });
       s += '<text class="ax" x="' + (x0 + slot / 2) + '" y="' + (Hh - 8) + '" text-anchor="middle">' + esc(p.label) + '</text>';
       s += '<rect class="hit" data-tip="' + esc(opt.tip(p)) + '" data-ym="' + p.ym + '" x="' + x0 + '" y="' + padT + '" width="' + slot + '" height="' + (Hh - padT) + '"/>';
     });
     return s + '</svg>';
   }
-  function narrowScreen() { return G.innerWidth < 600; }
   function trendCard(UI) {
-    var byMonth = UI.chartScope === 'month', unit = byMonth ? 'month' : 'half';
-    var pts = series(byMonth);
-    var seg = '<div class="seg"><button data-chart-scope="half" aria-pressed="' + !byMonth + '">Half</button><button data-chart-scope="month" aria-pressed="' + byMonth + '">Month</button></div>';
-    var h = '<section class="card"><div class="card-h"><h2>Net pay per ' + unit + '</h2>' + seg + '</div><div class="legend" style="margin-bottom:8px"><span><i style="background:var(--c1)"></i>Estimate</span><span><i style="background:var(--c2)"></i>Payslip</span></div>';
-    h += '<div class="chart" data-chart="1">' + bars(pts, { label: 'Net pay per ' + unit, n: 2, vals: function (p) { return [p.est, p.act]; }, step: function (m) { return m > 3000 ? 1000 : 500; }, fmtAx: function (g) { return g ? (g / 1000) + 'k' : '0'; },
-      lab: function (v) { return narrowScreen() ? (v / 1000).toFixed(1) + 'k' : Math.round(v); }, tip: function (p) { return p.name + '|Estimate RM' + fm(p.est) + (p.act != null ? ' · Payslip RM' + fm(p.act) + ' (' + (p.act - p.est >= 0 ? '+' : '−') + fm(Math.abs(p.act - p.est)) + ')' : p.partial ? ' · payslip for one half only' : '') + (p.current ? ' · in progress' : ''); } }) + '</div>';
-    h += '<p class="tiny muted" style="margin-top:6px">The lighter bar is the ' + unit + ' in progress.' + (byMonth ? ' A payslip bar needs both halves saved.' : '') + ' Tap a bar to open that month.</p>';
-    h += '<div class="card-h" style="margin-top:14px"><h2>OT hours per ' + unit + '</h2></div>';
-    h += '<div class="chart" data-chart="1">' + bars(pts, { label: 'OT hours per ' + unit, n: 1, h: 140, vals: function (p) { return [p.ot]; }, step: function (m) { return m > 40 ? 20 : m > 20 ? 10 : 5; }, fmtAx: function (g) { return g + 'h'; },
-      lab: function (v) { return v ? U.fh1(v) : ''; }, tip: function (p) { return p.name + '|OT ' + fh(p.ot) + 'h' + (p.otRec != null ? ' · payslip ' + fh(p.otRec) + 'h' : ''); } }) + '</div>';
-    return h + '</section>';
+    var byMonth = UI.chartScope === 'month', unit = byMonth ? 'month' : 'half', pts = series(byMonth);
+    return '<section class="card"><div class="card-h"><h2>Net pay per ' + unit + '</h2><div class="seg"><button data-chart-scope="half" aria-pressed="' + !byMonth + '">Half</button><button data-chart-scope="month" aria-pressed="' + byMonth + '">Month</button></div></div>' +
+      '<div class="legend" style="margin-bottom:8px"><span><i style="background:var(--c1)"></i>Estimate</span><span><i style="background:var(--c2)"></i>Payslip</span></div>' +
+      '<div class="chart" data-chart="1">' + bars(pts, { label: 'Net pay per ' + unit, n: 2, vals: function (p) { return [p.est, p.act]; }, step: function (m) { return m > 3000 ? 1000 : 500; }, fmtAx: function (g) { return g ? (g / 1000) + 'k' : '0'; },
+        lab: function (v) { return narrowScreen() ? (v / 1000).toFixed(1) + 'k' : Math.round(v); }, tip: function (p) { return p.name + '|Estimate RM' + fm(p.est) + (p.act != null ? ' · Payslip RM' + fm(p.act) + ' (' + (p.act - p.est >= 0 ? '+' : '−') + fm(Math.abs(p.act - p.est)) + ')' : p.partial ? ' · payslip for one half only' : '') + (p.current ? ' · in progress' : ''); } }) + '</div></section>';
   }
 
-  function slipsCard() {
+  /* Payslips: folded away until wanted. */
+  function slipsFold(UI) {
     var S = St.S, keys = Object.keys(S.records).sort().reverse();
-    var h = '<section class="card"><div class="card-h"><h2>Payslips</h2><button class="btn ghost sm" data-act="addSlip">+ Add manually</button></div>';
-    if (!keys.length) return h + '<div class="empty">No payslips saved yet.<br>Import a time card with its payslip, or add the net amount manually.</div></section>';
-    h += '<div class="slips">';
-    keys.forEach(function (k) {
-      var r = S.records[k], p = k.split('-'), ym = p[0] + '-' + p[1], hf = +p[2], net = r.payslip && r.payslip.net, hasDays = !!(S.months[ym] && Object.keys(S.months[ym]).length);
-      var est = R.recEstimate(k), diff = net != null && hasDays ? net - est : null;
-      h += '<button class="slip" data-slip="' + k + '"><div class="slip-ic">' + MON3[+p[1] - 1] + '</div><div class="slip-t"><b>' + U.periodName(ym, hf) + '</b><span>' + (r.source === 'import' ? 'Imported time card' : r.source === 'history' ? 'Earlier payslip' : 'Added manually') + (r.payslip && r.payslip.ot15_hours != null ? ' · OT ' + fh(r.payslip.ot15_hours) + 'h' : '') + '</span></div>' +
-        '<div class="slip-v"><b>' + (net != null ? 'RM' + fm(net) : '—') + '</b>' + (diff != null ? '<span class="chip ' + (Math.abs(diff) < 1 ? 'good' : diff > 0 ? 'good' : 'bad') + '">' + (Math.abs(diff) < 1 ? 'Matches' : (diff > 0 ? '+' : '−') + 'RM' + fm(Math.abs(diff)) + ' vs est.') + '</span>' : '') + '</div></button>';
-    });
-    return h + '</div></section>';
+    var h = '<details class="card fold" id="slipsDet"' + (UI.slipsOpen ? ' open' : '') + '><summary><h2>Payslips</h2><span class="chip">' + keys.length + '</span></summary>';
+    if (!keys.length) h += '<div class="empty">None yet. Import a time card with its payslip, or add one by hand.</div>';
+    else {
+      h += '<div class="slips">';
+      keys.forEach(function (k) {
+        var r = S.records[k], p = k.split('-'), ym = p[0] + '-' + p[1], hf = +p[2], net = r.payslip && r.payslip.net, hasDays = !!(S.months[ym] && Object.keys(S.months[ym]).length);
+        var est = R.recEstimate(k), diff = net != null && hasDays ? net - est : null;
+        h += '<button class="slip" data-slip="' + k + '"><div class="slip-ic">' + MON3[+p[1] - 1] + '</div><div class="slip-t"><b>' + U.periodName(ym, hf) + '</b><span>' + (r.payslip && r.payslip.ot15_hours != null ? 'OT ' + fh(r.payslip.ot15_hours) + ' h' : r.source === 'history' ? 'Earlier payslip' : 'No OT line') + '</span></div>' +
+          '<div class="slip-v"><b>' + (net != null ? 'RM' + fm(net) : '—') + '</b>' + (diff != null ? '<span class="chip ' + (Math.abs(diff) < 1 ? 'good' : 'bad') + '">' + (Math.abs(diff) < 1 ? 'Matches' : (diff > 0 ? '+' : '−') + fm(Math.abs(diff))) + '</span>' : '') + '</div></button>';
+      });
+      h += '</div>';
+    }
+    return h + '<button class="btn ghost sm" data-act="addSlip" style="margin-top:10px">+ Add a payslip by hand</button></details>';
   }
 
   /* chart hover/tap layer */
   V.wireCharts = function (root) {
     root.querySelectorAll('.chart[data-chart]').forEach(function (ch) {
       var tip = null;
-      var show = function (el, ev) {
+      var show = function (el) {
         if (!tip) { tip = document.createElement('div'); tip.className = 'tip'; ch.appendChild(tip); }
         var t = (el.dataset.tip || '').split('|'); tip.innerHTML = '<b>' + esc(t[0]) + '</b>' + esc(t[1] || '');
         var r = ch.getBoundingClientRect(), b = el.getBoundingClientRect();
-        tip.style.left = (b.left - r.left + b.width / 2) + 'px'; tip.style.top = (b.top - r.top + 10) + 'px';
+        tip.style.left = Math.min(r.width - 90, Math.max(90, b.left - r.left + b.width / 2)) + 'px'; tip.style.top = (b.top - r.top + 10) + 'px';
       };
-      ch.addEventListener('pointerover', function (e) { var el = e.target.closest('.hit'); if (el) show(el, e); });
+      ch.addEventListener('pointerover', function (e) { var el = e.target.closest('.hit'); if (el) show(el); });
       ch.addEventListener('pointerout', function (e) { if (tip && !ch.contains(e.relatedTarget)) { tip.remove(); tip = null; } });
       ch.addEventListener('click', function (e) { var el = e.target.closest('.hit'); if (el && el.dataset.ym) { Ga.UI.ym = el.dataset.ym; Ga.go('cal'); } });
     });
