@@ -62,22 +62,17 @@
   };
 
   V.imp = function (UI) {
-    var h = '<div class="stack"><div class="grid2"><section class="card"><div class="card-h"><h2>1 · Get the JSON from any AI chat</h2></div><div class="steps">' +
-      '<div class="step"><p>Pick the period, then copy the prompt.</p></div>' +
-      '<div class="step"><p>Open a new AI chat. Paste the prompt and attach a photo of the <b>time card</b>. Attach the <b>payslip</b> too if you have it.</p></div>' +
-      '<div class="step"><p>Download the <b>.json</b> file it gives you, then load it here.</p></div></div>' +
-      '<div class="row" style="margin-top:14px"><div class="field"><label for="pYm">Month</label><select id="pYm">' + Ga.ymOptions(UI.promptYm) + '</select></div>' +
-      '<div class="field" style="flex:0 0 auto"><label>Half</label><div class="seg"><button data-ph="1" aria-pressed="' + (UI.promptHalf === 1) + '">1–15</button><button data-ph="2" aria-pressed="' + (UI.promptHalf === 2) + '">16–end</button></div></div></div>' +
-      '<pre class="prompt-box" id="promptTxt" tabindex="0" style="margin-top:12px">' + esc(V.buildPrompt(UI.promptYm, UI.promptHalf)) + '</pre>' +
-      '<button class="btn primary block" id="copyPrompt" style="margin-top:10px">' + IC().copy + 'Copy prompt</button></section>';
-    h += '<section class="card"><div class="card-h"><h2>2 · Load the file</h2></div>' +
-      '<label class="drop" id="drop" for="fileIn">' + IC().file.replace('<svg', '<svg style="width:28px;height:28px;color:var(--accent)"') + '<b>Choose the .json file</b><span class="small muted">or drop it here. Backup files work too.</span></label>' +
+    var h = '<div class="stack narrow"><section class="card step-card"><div class="step-n">1</div><div><h2>Copy the prompt</h2><p class="small muted" style="margin:4px 0 14px">Paste it into any AI chat with a photo of the time card, and the payslip if you have it.</p>' +
+      '<div class="row" style="align-items:flex-end"><div class="field"><label for="pYm">Month</label><select id="pYm">' + Ga.ymOptions(UI.promptYm) + '</select></div><div class="field" style="flex:0 0 auto"><label>Half</label><div class="seg"><button data-ph="1" aria-pressed="' + (UI.promptHalf === 1) + '">1–15</button><button data-ph="2" aria-pressed="' + (UI.promptHalf === 2) + '">16–end</button></div></div></div>' +
+      '<button class="btn primary block" id="copyPrompt" style="margin-top:14px">' + IC().copy + 'Copy prompt</button>' +
+      '<details class="fold-in" id="promptDet"' + Ga.fold('promptDet') + '><summary><span>Show the prompt</span></summary><pre class="prompt-box" id="promptTxt" tabindex="0">' + esc(V.buildPrompt(UI.promptYm, UI.promptHalf)) + '</pre></details></div></section>';
+    h += '<section class="card step-card"><div class="step-n">2</div><div><h2 style="margin-bottom:14px">Load the JSON it gives you</h2>' +
+      '<label class="drop" id="drop" for="fileIn">' + IC().file.replace('<svg', '<svg style="width:28px;height:28px;color:var(--accent)"') + '<b>Choose the .json file</b><span class="small muted">or drop it here</span></label>' +
       '<input type="file" id="fileIn" accept=".json,application/json,text/plain" hidden>' +
-      '<details style="margin-top:12px"><summary class="small" style="cursor:pointer;font-weight:600">The AI only gave text? Paste it instead</summary>' +
-      '<div class="field" style="margin-top:8px"><label for="pasteIn">JSON text</label><textarea id="pasteIn" rows="5" placeholder="{ &quot;type&quot;: &quot;akef-timecard&quot;, ... }"></textarea></div>' +
-      '<button class="btn" id="pasteGo" style="margin-top:8px">Read pasted text</button></details>' +
-      '<div id="pastImports" style="margin-top:16px"><h3 style="margin-bottom:6px">Past imports</h3>' + (Sy.ready() ? '<p class="small muted">Loading from GitHub…</p>' : '<p class="small muted">Set up sync in More → Sync to keep a copy of every import in your repo.</p>') + '</div></section></div>';
-    h += '<div id="preview">' + (UI.pending ? V.preview(UI.pending) : '') + '</div></div>';
+      '<details class="fold-in" id="pasteDet"' + Ga.fold('pasteDet') + '><summary><span>Paste text instead</span></summary><div class="field"><label for="pasteIn">JSON text</label><textarea id="pasteIn" rows="5" placeholder="{ &quot;type&quot;: &quot;akef-timecard&quot;, ... }"></textarea></div>' +
+      '<button class="btn" id="pasteGo" style="margin-top:8px">Read pasted text</button></details></div></section>';
+    h += '<div id="preview">' + (UI.pending ? V.preview(UI.pending) : '') + '</div>';
+    h += '<details class="card fold" id="pastDet"' + Ga.fold('pastDet') + '><summary><h2>Past imports</h2></summary><div id="pastImports">' + (Sy.ready() ? '<p class="small muted">Loading from GitHub…</p>' : '<p class="small muted">Set up sync in More to keep a copy of every import.</p>') + '</div></details></div>';
     return h;
   };
   V.wireImport = function (UI) {
@@ -96,9 +91,9 @@
     if (Sy.ready()) {
       Sy.listImports().then(function (list) {
         var el = document.getElementById('pastImports'); if (!el) return;
-        if (!list.length) { el.innerHTML = '<h3 style="margin-bottom:6px">Past imports</h3><p class="small muted">None yet. Every file you save here is kept in <code>imports/</code> in your repo.</p>'; return; }
-        el.innerHTML = '<h3 style="margin-bottom:6px">Past imports</h3><div class="list">' + list.slice(0, 12).map(function (f) { var m = f.name.match(/^(\d{4})-(\d{2})-H(\d)_(\d{8})-(\d{4})/); var lab = m ? U.periodName(m[1] + '-' + m[2], +m[3]) : f.name; var when = m ? m[4].slice(6, 8) + ' ' + MON3[+m[4].slice(4, 6) - 1] + ' ' + m[4].slice(0, 4) + ', ' + m[5].slice(0, 2) + ':' + m[5].slice(2) : ''; return '<button class="item" data-imp="' + esc(f.path) + '"><div><b>' + esc(lab) + '</b><span>' + esc(when) + ' · ' + Math.round(f.size / 1024 * 10) / 10 + ' KB</span></div><span class="chip">Open</span></button>'; }).join('') + '</div>';
-      }, function (e) { var el = document.getElementById('pastImports'); if (el) el.innerHTML = '<h3 style="margin-bottom:6px">Past imports</h3><p class="small muted">Could not load: ' + esc(e.message) + '</p>'; });
+        if (!list.length) { el.innerHTML = '<p class="small muted">None yet. Every file you save here is kept in <code>imports/</code> in your repo.</p>'; return; }
+        el.innerHTML = '<div class="list">' + list.slice(0, 12).map(function (f) { var m = f.name.match(/^(\d{4})-(\d{2})-H(\d)_(\d{8})-(\d{4})/); var lab = m ? U.periodName(m[1] + '-' + m[2], +m[3]) : f.name; var when = m ? m[4].slice(6, 8) + ' ' + MON3[+m[4].slice(4, 6) - 1] + ' ' + m[4].slice(0, 4) + ', ' + m[5].slice(0, 2) + ':' + m[5].slice(2) : ''; return '<button class="item" data-imp="' + esc(f.path) + '"><div><b>' + esc(lab) + '</b><span>' + esc(when) + ' · ' + Math.round(f.size / 1024 * 10) / 10 + ' KB</span></div><span class="chip">Open</span></button>'; }).join('') + '</div>';
+      }, function (e) { var el = document.getElementById('pastImports'); if (el) el.innerHTML = '<p class="small muted">Could not load: ' + esc(e.message) + '</p>'; });
     }
   };
   A.openPastImport = function (UI, path) {

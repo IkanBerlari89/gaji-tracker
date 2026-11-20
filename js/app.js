@@ -21,10 +21,10 @@
     x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
     lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
   };
-  var TABS = [['home', 'Home', 'home'], ['cal', 'Calendar', 'cal'], ['imp', 'Import', 'imp'], ['plan', 'Plan', 'plan'], ['more', 'More', 'more']];
+  var TABS = [['home', 'Home', 'home'], ['cal', 'Calendar', 'calendar-dots'], ['imp', 'Import', 'arrow-down-to-bracket'], ['plan', 'Plan', 'horizontal-sliders-lines'], ['more', 'More', 'dots-horizontal']];
 
   var t0 = U.today(), cur = U.ymOf(t0.y, t0.m);
-  var UI = Ga.UI = { tab: 'home', sub: 'rules', ym: cur, brush: 'edit', heroScope: 'half', chartScope: 'half', otScope: 'half', trackDate: null, trkType: null, trkOut: null, plStart: cur, plN: 3, plTgYm: cur, plFillOpen: false, plClearArm: false, cmpOpen: false, planYm: cur,
+  var UI = Ga.UI = { tab: 'home', sub: 'menu', paint: false, legend: false, folds: {}, ym: cur, brush: 'edit', heroScope: 'half', chartScope: 'half', otScope: 'half', trackDate: null, trkType: null, trkOut: null, plStart: cur, plN: 3, plTgYm: cur, plFillOpen: false, plClearArm: false, cmpOpen: false, planYm: cur,
     planA: { mt: '17:30', fr: '17:30', sa: '11:30', ph: 'rest' }, planB: { mt: '18:30', fr: '18:30', sa: '17:00', ph: 'rest' },
     promptYm: cur, promptHalf: t0.d <= 15 ? 1 : 2, pending: null, clearArm: false, targetOpen: false, rulesOpen: false };
 
@@ -42,7 +42,8 @@
   };
   Ga.sheet = function (inner, labelId) { document.getElementById('layer').innerHTML = '<div class="scrim" data-close="1"><div class="sheet" role="dialog" aria-modal="true"' + (labelId ? ' aria-labelledby="' + labelId + '"' : '') + '><div class="grab"></div>' + inner + '</div></div>'; };
   Ga.closeLayer = function () { document.getElementById('layer').innerHTML = ''; };
-  Ga.go = function (tab) { UI.tab = tab; UI.clearArm = false; Ga.render(); window.scrollTo(0, 0); };
+  Ga.go = function (tab) { if (tab !== UI.tab) { UI.paint = false; UI.brush = 'edit'; } UI.tab = tab; UI.clearArm = false; UI.enter = true; Ga.render(); window.scrollTo(0, 0); };
+  Ga.fold = function (id) { return UI.folds[id] ? ' open' : ''; };
   Ga.readFile = function (f) { var rd = new FileReader(); rd.onload = function () { A.handleText(UI, String(rd.result)); }; rd.onerror = function () { Ga.toast('Could not read that file.'); }; rd.readAsText(f); };
   Ga.saveFile = function (name, text, mime) {
     var blob = new Blob([text], { type: mime });
@@ -53,11 +54,11 @@
   function showText(title, t) { Ga.sheet('<div class="sheet-h"><h2>' + esc(title) + '</h2><button class="icon-btn" data-close="1" aria-label="Close">' + Ga.IC.x + '</button></div><p class="small muted" style="margin-bottom:8px">Saving files did not work here. Select this text, copy it and keep it somewhere safe.</p><pre class="prompt-box">' + esc(t) + '</pre>'); }
 
   /* ---- theme ---- */
-  var theme = St.lsGet('gaji-theme') || 'system';
+  var theme = St.lsGet('gaji-theme') === 'light' ? 'light' : 'dark';
   Ga.theme = function () { return theme; };
-  function applyTheme() { var r = document.documentElement; if (theme === 'system') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', theme); var b = document.getElementById('themeBtn'); b.innerHTML = theme === 'dark' ? Ga.IC.moon : theme === 'light' ? Ga.IC.sun : Ga.IC.auto; b.title = 'Theme: ' + theme; }
-  Ga.setTheme = function (t) { theme = t; St.lsSet('gaji-theme', t); applyTheme(); };
-  document.getElementById('themeBtn').onclick = function () { Ga.setTheme(theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system'); Ga.toast('Theme: ' + theme); if (UI.tab === 'more') Ga.render(); };
+  function applyTheme() { var r = document.documentElement; if (theme === 'light') r.setAttribute('data-theme', 'light'); else r.removeAttribute('data-theme'); var b = document.getElementById('themeBtn'); b.innerHTML = theme === 'dark' ? Ga.IC.moon : Ga.IC.sun; b.title = 'Theme: ' + theme; var mt = document.querySelector('meta[name=theme-color]'); if (mt) mt.content = theme === 'dark' ? '#15191F' : '#FFFFFF'; }
+  Ga.setTheme = function (t) { theme = t === 'light' ? 'light' : 'dark'; St.lsSet('gaji-theme', theme); applyTheme(); };
+  document.getElementById('themeBtn').onclick = function () { Ga.setTheme(theme === 'dark' ? 'light' : 'dark'); if (UI.tab === 'more') Ga.render(); };
 
   /* ---- sync pill ---- */
   function pill(s) {
@@ -73,13 +74,16 @@
   /* ---- render ---- */
   Ga.render = function () {
     R.computeAL();
-    document.getElementById('nav').innerHTML = TABS.map(function (t) { return '<button data-tab="' + t[0] + '"' + (UI.tab === t[0] ? ' aria-current="page"' : '') + '>' + Ga.IC[t[2]] + '<span>' + t[1] + '</span></button>'; }).join('');
+    document.getElementById('nav').innerHTML = TABS.map(function (t) { return '<button data-tab="' + t[0] + '"' + (UI.tab === t[0] ? ' aria-current="page"' : '') + '>' + '<i class="ic ic-' + t[2] + '"></i><span>' + t[1] + '</span></button>'; }).join('');
     var m = document.getElementById('main');
+    m.className = UI.enter ? 'enter' : ''; UI.enter = false;
     m.innerHTML = UI.tab === 'home' ? V.home(UI) : UI.tab === 'cal' ? V.cal(UI) : UI.tab === 'imp' ? V.imp(UI) : UI.tab === 'plan' ? V.plan(UI) : V.more(UI);
     if (UI.tab === 'imp') V.wireImport(UI);
+    var selB = m.querySelector('.brush[aria-pressed="true"]'); if (selB) selB.parentNode.scrollLeft = selB.offsetLeft - selB.parentNode.clientWidth / 2 + selB.offsetWidth / 2;
     if (UI.tab === 'home') V.wireCharts(m);
     if (UI.tab === 'more') { V.wireSettings(); V.wireHistory(); V.wireBackup(); }
-    document.getElementById('sub').textContent = UI.tab === 'home' ? (St.isSetUp() ? 'Basic RM' + U.fm(R.rates(cur).basic) + ' · OT RM' + U.fm(R.rates(cur).r15) + '/h' : 'Set your basic pay in More → Settings') : TABS.filter(function (t) { return t[0] === UI.tab; })[0][1];
+    var tabName = TABS.filter(function (t) { return t[0] === UI.tab; })[0][1], rate = St.isSetUp() ? 'Basic RM' + U.fm(R.rates(cur).basic) + ' · OT RM' + U.fm(R.rates(cur).r15) + '/h' : 'Set your basic pay in More';
+    document.getElementById('pageTitle').textContent = tabName; document.getElementById('sub').textContent = rate; document.getElementById('sideFoot').textContent = rate;
     try { location.hash = UI.tab; } catch (e) {}
   };
 
@@ -95,7 +99,7 @@
     var miss = Ga.missing(), next = wasMiss ? (miss.filter(function (k) { return k > UI.trackDate; })[0] || miss[0]) : null;
     Ga.toast('Saved ' + p.d + ' ' + U.MON3[p.m - 1] + ' · ' + (ent.out || ent.k) + (next ? ' · next: ' + (+next.slice(8, 10)) + ' ' + U.MON3[+next.slice(5, 7) - 1] : wasMiss ? ' · all days filled' : ''));
     if (next) UI.trackDate = next;
-    Ga.render();
+    Ga.render(); if (Ga.cat) Ga.cat.cheer();
   };
   A.trkSave = function (UI) {
     var S = St.S, p = A.parseIso(UI.trackDate), e = (S.months[p.ym] || {})[U.pad(p.d)], ty = U.dayType(p.y, p.m, p.d);
@@ -154,7 +158,7 @@
   }
 
   /* ---- events ---- */
-  document.getElementById('nav').addEventListener('click', function (e) { var b = e.target.closest('[data-tab]'); if (!b) return; Ga.go(b.dataset.tab); });
+  document.getElementById('nav').addEventListener('click', function (e) { var b = e.target.closest('[data-tab]'); if (!b) return; if (b.dataset.tab === 'more') UI.sub = 'menu'; Ga.go(b.dataset.tab); });
   document.getElementById('layer').addEventListener('click', function (e) {
     if (e.target.dataset && e.target.dataset.close || e.target.closest('button[data-close]')) Ga.closeLayer();
     var b = e.target.closest('[data-viewcal]'); if (b) { UI.ym = b.dataset.viewcal; Ga.closeLayer(); Ga.go('cal'); }
@@ -164,6 +168,7 @@
     if (e.target.closest('summary') && e.target.closest('#tgDet')) { UI.rulesOpen = !document.getElementById('tgDet').open; return; }
     if (e.target.closest('summary') && e.target.closest('#heroDet')) { UI.heroOpen = !document.getElementById('heroDet').open; return; }
     if (e.target.closest('summary') && e.target.closest('#slipsDet')) { UI.slipsOpen = !document.getElementById('slipsDet').open; return; }
+    var sm = e.target.closest('summary'); if (sm) { if (sm.parentNode.id) UI.folds[sm.parentNode.id] = !sm.parentNode.open; return; }
     if (e.target.closest('summary') && e.target.closest('#tgOuter')) { UI.targetOpen = !document.getElementById('tgOuter').open; return; }
     if (e.target.closest('summary') && e.target.closest('#plFillDet')) { UI.plFillOpen = !document.getElementById('plFillDet').open; return; }
     if (e.target.closest('summary') && e.target.closest('#cmpDet')) { UI.cmpOpen = !document.getElementById('cmpDet').open; return; }
@@ -201,6 +206,10 @@
     else if (ds.today != null) { var td = U.today(), v = ds.today, ent = v === '' ? null : v.indexOf('t:') === 0 ? { k: 'W', out: v.slice(2) } : { k: v }; var old = (S.months[UI.ym] || {})[U.pad(td.d)]; if (ent && old && old.real) ent = Object.assign({}, old, ent); A.setDay(U.ymOf(td.y, td.m), td.d, ent, 'Today ' + (ent ? (ent.out || ent.k) : 'cleared')); Ga.render(); }
     else if (ds.act === 'addSlip') A.openSlip(null);
     else if (ds.act === 'calToday') { UI.ym = cur; Ga.render(); }
+    else if (ds.act === 'paint') { UI.paint = !UI.paint; UI.brush = UI.paint ? 't:18:00' : 'edit'; Ga.render(); }
+    else if (ds.act === 'legend') { UI.legend = !UI.legend; Ga.render(); }
+    else if (ds.plopen) { UI.plOpen = UI.plOpen === ds.plopen ? null : ds.plopen; Ga.render(); }
+    else if (ds.cat) { Ga.cat.set(ds.cat === '1'); Ga.render(); }
     else if (ds.act === 'extract') { UI.plStart = UI.ym < cur ? cur : UI.ym; UI.plTgYm = UI.plStart; Ga.go('plan'); Ga.toast('Plan from ' + U.MONTHS[U.parseYm(UI.plStart).m - 1] + '. The Calendar stays as it is.'); }
     else if (ds.act === 'impSave') A.commitImport(UI);
     else if (ds.act === 'impCancel') { UI.pending = null; Ga.render(); }
@@ -234,9 +243,9 @@
   });
 
   /* ---- boot ---- */
-  St.load(); Sy.init(); applyTheme();
+  St.load(); Sy.init(); applyTheme(); UI.enter = true;
   if (location.hash) { var hh = location.hash.slice(1); if (TABS.some(function (x) { return x[0] === hh; })) UI.tab = hh; }
-  Ga.render(); pill(Sy.status);
+  Ga.render(); pill(Sy.status); if (Ga.cat) Ga.cat.init();
   if (Sy.ready()) Sy.pull().catch(function () {});
   else if (!St.isSetUp()) setupSheet();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') { navigator.serviceWorker.register('sw.js').catch(function () {}); }

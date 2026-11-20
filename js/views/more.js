@@ -6,10 +6,21 @@
   var V = Ga.V = Ga.V || {}, A = Ga.A = Ga.A || {};
   var SUB = [['rules', 'Rules'], ['settings', 'Settings'], ['sync', 'Sync'], ['history', 'History'], ['backup', 'Backup']];
 
+  var MENU = [['settings', 'gear', 'Pay and leave', 'Basic pay, raise month, annual leave, tracker start'], ['sync', 'share', 'Sync', ''], ['history', 'clock-time', 'Versions', 'Go back to an earlier save'], ['backup', 'floppy-disk-save', 'Backup', 'Export for Excel, restore, clear this device'], ['rules', 'list', 'Rules and rates', 'How every ringgit is counted']];
   V.more = function (UI) {
-    var h = '<div class="stack"><div class="subnav" role="tablist">' + SUB.map(function (s) { return '<button role="tab" data-sub="' + s[0] + '" aria-pressed="' + (UI.sub === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>';
-    h += UI.sub === 'settings' ? settings(UI) : UI.sub === 'sync' ? sync(UI) : UI.sub === 'history' ? history(UI) : UI.sub === 'backup' ? backup(UI) : rules(UI);
-    return h + '</div>';
+    var sub = UI.sub, found = MENU.filter(function (m) { return m[0] === sub; })[0];
+    if (!found) {
+      var catOn = Ga.cat && Ga.cat.on();
+      return '<div class="stack narrow"><section class="card menu">' + MENU.map(function (m) {
+        var desc = m[0] === 'sync' ? (Sy.ready() ? 'GitHub · ' + esc(Sy.status.msg || 'connected') : 'Not set up yet. Phone and laptop share one data set.') : m[3];
+        return '<button class="mitem" data-sub="' + m[0] + '"><span class="mi"><i class="ic ic-' + m[1] + '"></i></span><span><b>' + m[2] + '</b><span>' + desc + '</span></span></button>';
+      }).join('') + '</section>' +
+        '<section class="card"><h2 style="margin-bottom:14px">Look and feel</h2><div class="stack" style="gap:14px">' +
+        '<div class="row" style="justify-content:space-between"><b>Theme</b><div class="seg"><button data-theme="dark" aria-pressed="' + (Ga.theme() === 'dark') + '">Dark</button><button data-theme="light" aria-pressed="' + (Ga.theme() === 'light') + '">Light</button></div></div>' +
+        '<div class="row" style="justify-content:space-between"><div><b>Pixel cat</b><p class="tiny muted">Walks along the bottom. Tap it.</p></div><div class="seg"><button data-cat="1" aria-pressed="' + !!catOn + '">On</button><button data-cat="0" aria-pressed="' + !catOn + '">Off</button></div></div></div></section></div>';
+    }
+    return '<div class="stack' + (sub === 'rules' ? '' : ' narrow') + '"><button class="back" data-sub="menu">' + Ga.IC.left + 'More</button>' +
+      (sub === 'settings' ? settings(UI) : sub === 'sync' ? sync(UI) : sub === 'history' ? history(UI) : sub === 'backup' ? backup(UI) : rules(UI)) + '</div>';
   };
 
   function rules(UI) {
@@ -40,7 +51,6 @@
       '<div class="row" style="justify-content:space-between"><div><b>Day base shown in calendar</b><p class="tiny muted">Per day = basic ÷ 26. Per hour = basic ÷ the month’s scheduled hours.</p></div><div class="seg"><button data-base="day" aria-pressed="' + (st.baseMode === 'day') + '">Per day</button><button data-base="hour" aria-pressed="' + (st.baseMode === 'hour') + '">Per hour</button></div></div></div></section>';
     h += '<section class="card"><h2 style="margin-bottom:6px">Annual leave</h2><p class="tiny muted" style="margin-bottom:10px">AL added on or after the balance date uses up the balance. With no balance left, AL counts as an unpaid day. The balance resets to the yearly entitlement on 1 January.</p>' +
       '<div class="row"><div class="field"><label for="setAlLeft">AL left on</label><input id="setAlLeft" inputmode="numeric" value="' + st.alLeft + '"></div><div class="field"><label for="setAlAsOf">Balance date</label><input id="setAlAsOf" type="date" value="' + st.alAsOf + '"></div><div class="field"><label for="setAlQuota">AL per year</label><input id="setAlQuota" inputmode="numeric" value="' + st.alQuota + '"></div></div></section>';
-    h += '<section class="card"><h2 style="margin-bottom:6px">Appearance</h2><div class="row" style="justify-content:space-between"><div><b>Theme</b><p class="tiny muted">Per device.</p></div><div class="seg">' + [['system', 'Auto'], ['light', 'Light'], ['dark', 'Dark']].map(function (t) { return '<button data-theme="' + t[0] + '" aria-pressed="' + (Ga.theme() === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div></div></section>';
     return h;
   }
   V.wireSettings = function () {

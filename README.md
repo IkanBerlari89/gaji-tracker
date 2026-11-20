@@ -34,3 +34,5 @@ node test/make-icons.js     # regenerate PWA icons
 Files: `index.html`, `css/app.css`, `js/util.js` (helpers, public holidays), `js/rules.js` (pay rules, pure), `js/store.js` (state, local cache, merge), `js/sync.js` (GitHub Contents API), `js/views/*.js`, `js/app.js` (shell), `sw.js` (offline shell cache).
 
 No personal data lives in this repo. Pay settings and payslips exist only in your private data repo and in your browser.
+
+Icons: [Atlas Icons](https://github.com/Vectopus/Atlas-icons-font) basic-ui pack, MIT licence (see fonts/ATLAS-ICONS-LICENSE.txt).

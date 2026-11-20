@@ -7,69 +7,63 @@
   var IC = function () { return Ga.IC; };
   var FUTURE_OK = { AL: 1, UPH: 1, UPL: 1 };
 
-  function brushList() {
-    var b = [['edit', 'Edit', 'tap a day']];
-    TIMES.forEach(function (t) { var n = U.tmin(t), sub = n === 780 ? '½ day' : n < 1050 ? 'Sat' : n === 1050 ? 'normal' : n >= 1140 ? 'NR' : 'OT'; b.push(['t:' + t, t, sub]); });
-    return b;
-  }
-  /* Brush toolbar (shared by Calendar and Plan). */
-  V.brushBar = function (UI, year, M, mode) {
-    var h = '<div class="brushes"><div class="brush-scroll" role="toolbar" aria-label="Brush">';
-    brushList().forEach(function (b) { h += '<button class="brush" data-brush="' + b[0] + '" aria-pressed="' + (UI.brush === b[0]) + '">' + b[1] + '<small>' + b[2] + '</small></button>'; });
-    h += '<span class="brush-grp">Leave</span>';
-    Object.keys(LEAVES).forEach(function (k) { h += '<button class="brush lv" data-brush="' + k + '" aria-pressed="' + (UI.brush === k) + '">' + (k === 'X2' ? '×2' : k === 'CL' ? 'Leave' : k) + '<small>' + LEAVES[k].replace('Unpaid ', '') + '</small></button>'; });
-    h += '<button class="brush lv" data-brush="erase" aria-pressed="' + (UI.brush === 'erase') + '">Erase<small>clear day</small></button>';
-    h += '</div>' + (UI.brush === 'AL' && R.alLeft(year) !== null && R.alLeft(year) <= 0 ? '<div class="note warn" style="margin-top:6px">AL balance for ' + year + ' is 0. Any AL you add now counts as <b>unpaid</b> (−RM' + fm(M.r.unpaid) + ' a day).</div>' : '') +
-      (mode === 'plan' ? '<p class="tiny muted" style="margin-top:4px">Plan mode: every day can be changed here, past or future. The Calendar is never touched.</p>' : '<p class="tiny muted" style="margin-top:4px">Past days and today can be edited. Days after today take only AL, UPH or UPL. Imported time-card days are locked.</p>') + '</div>';
-    return h;
+  /* Paint bar: pick a value, then tap days. Only shown while Paint is on. */
+  V.brushBar = function (UI, year, M) {
+    var h = '<div class="brushes"><div class="brush-scroll" role="toolbar" aria-label="Paint with">';
+    TIMES.forEach(function (t) { h += '<button class="brush" data-brush="t:' + t + '" aria-pressed="' + (UI.brush === 't:' + t) + '">' + t + '</button>'; });
+    Object.keys(LEAVES).forEach(function (k) { h += '<button class="brush lv" data-brush="' + k + '" aria-pressed="' + (UI.brush === k) + '" title="' + LEAVES[k] + '">' + (k === 'X2' ? '2×' : k === 'CL' ? 'Leave' : k) + '</button>'; });
+    h += '<button class="brush lv" data-brush="erase" aria-pressed="' + (UI.brush === 'erase') + '">Erase</button></div>';
+    if (UI.brush === 'AL' && R.alLeft(year) !== null && R.alLeft(year) <= 0) h += '<div class="note warn" style="margin-top:6px">AL balance for ' + year + ' is 0, so AL counts as <b>unpaid</b> (−RM' + fm(M.r.unpaid) + ' a day).</div>';
+    return h + '</div>';
   };
 
-  /* One month grid. opts: { compact, mode: 'cal'|'plan', sugg } */
+  /* One month grid. A cell shows the day number and one label (clock-out or code); colour says the rest. opts: { compact, mode: 'cal'|'plan', sugg } */
   V.monthGrid = function (ym, days, opts) {
     opts = opts || {};
     var p = U.parseYm(ym), n = U.daysIn(p.y, p.m), td = U.today(), todayIso = U.iso(td.y, td.m, td.d), first = new Date(p.y, p.m - 1, 1).getDay(), lead = (first + 6) % 7, isCur = td.y === p.y && td.m === p.m;
     var compact = !!opts.compact, plan = opts.mode === 'plan', sugg = opts.sugg || null;
     var h = '<div class="cal' + (compact ? ' compact' : '') + '">', missSet = {}; Ga.missing().forEach(function (k) { missSet[k] = 1; });
-    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(function (d) { h += '<div class="dow' + (d === 'Sun' ? ' sun' : '') + '">' + d + '</div>'; });
+    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].forEach(function (d) { h += '<div class="dow' + (d === 'Sun' ? ' sun' : '') + '">' + (compact ? d.charAt(0) : d) + '</div>'; });
     var cells = [], i;
     for (i = 0; i < lead; i++) cells.push('<div class="day pad"></div>');
     for (var d = 1; d <= n; d++) {
       if (d === 16 && !compact) {
-        var rem = cells.length % 7; for (i = 0; rem && i < 7 - rem; i++) cells.push('<div class="day pad"></div>'); cells.push('<div class="half-split">2nd half · 16–' + n + '</div>');
+        var rem = cells.length % 7; for (i = 0; rem && i < 7 - rem; i++) cells.push('<div class="day pad"></div>'); cells.push('<div class="half-split">2nd half</div>');
         var lead2 = (new Date(p.y, p.m - 1, 16).getDay() + 6) % 7; for (i = 0; i < lead2; i++) cells.push('<div class="day pad"></div>');
       }
-      var iso = U.iso(p.y, p.m, d), future = iso > todayIso, e = days[pad(d)], sg = sugg ? sugg[pad(d)] || null : null, c = R.dayCalc(ym, d, sg || e), isT = isCur && td.d === d;
-      var real = !!(e && e.real), planned = !!(e && e.plan);
+      var iso = U.iso(p.y, p.m, d), future = iso > todayIso, e = days[pad(d)], sg = sugg ? sugg[pad(d)] || null : null, ee = sg || e, c = R.dayCalc(ym, d, ee), isT = isCur && td.d === d;
+      var real = !!(e && e.real), planned = !!(e && e.plan), isMiss = !e && !plan && missSet[iso];
       var locked = plan ? false : (real || (future && !(e && FUTURE_OK[e.k])));
-      var k = c.kind === 'early' ? 'k-early' : c.kind === 'half' ? 'k-norm' : c.kind === 'empty' ? '' : 'k-' + c.kind, isMiss = !e && missSet[iso];
-      var lbl = c.label || (c.t === 'SU' ? '' : isMiss ? '?' : future ? '' : '—');
-      if (real && !plan && e.k === 'W' && e['in']) lbl = esc(e['in']) + '–' + esc(e.out);
-      var rm = (c.t === 'SU' && !c.ot2) || (isMiss && !plan) ? '' : (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total));
-      cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (planned ? ' planned' : '') + (real && !plan ? ' real' : '') + (locked ? ' locked' : '') + (future && !plan && !e ? ' future' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + (c.ph ? ' ' + esc(c.ph) : '') + ' ' + esc(c.label || lbl) + (real ? ' (time card, locked)' : locked ? ' (locked)' : '') + '">' +
-        '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span>' +
-        '<span class="lbl' + (real && e.k === 'W' && e['in'] ? ' io' : '') + '">' + lbl + '</span>' + (c.dlab ? '<span class="dl ' + (c.dh > 0 ? 'pos' : c.dh < 0 || c.up ? 'neg' : '') + '">' + esc(c.dlab) + '</span>' : isMiss && !plan ? '<span class="dl neg">not filled</span>' : '') +
-        (sg ? '<span class="tag sg">TARGET</span>' : real && !plan ? '<span class="tag lock" title="' + (e.edited ? 'From time card, edited by hand' : 'From time card') + '"' + (e.edited ? ' style="background:var(--amber-strong)"' : '') + '>' + IC().lock + '</span>' : planned ? '<span class="tag sg">PLAN</span>' : c.nr ? '<span class="tag">NR</span>' : '') +
-        '<span class="rm">' + (rm === '' ? '' : 'RM' + rm) + '</span></button>');
+      var k = c.kind === 'early' ? 'k-early' : c.kind === 'half' || c.kind === 'norm' || c.kind === 'empty' ? '' : 'k-' + c.kind;
+      var lbl = '';
+      if (ee) lbl = c.ot2 ? '2×' : ee.k === 'W' ? esc(ee.out || '') : c.over ? 'AL✕' : ee.k === 'CL' ? 'Leave' : ee.k === 'UPL' ? 'Unpaid' : ee.k === 'UPH' ? '½ unp.' : ee.k;
+      else if (c.ph) lbl = 'PH'; else if (isMiss) lbl = '?';
+      var say = ee ? (ee.k === 'W' ? 'out ' + (ee.out || '') + (c.ot ? ', OT ' + U.fh1(c.ot) + ' hours' : '') : (LEAVES[ee.k] || ee.k)) : c.ph ? 'public holiday' : isMiss ? 'not filled' : 'empty';
+      cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (planned ? ' planned' : '') + (locked ? ' locked' : '') + (future && !plan && !e ? ' future' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + ', ' + esc(say) + (real && !plan ? ', from time card' : planned ? ', planned' : '') + '">' +
+        '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span><span class="lbl">' + lbl + '</span>' +
+        (real && !plan ? '<span class="tag lock' + (e.edited ? ' ed' : '') + '" title="' + (e.edited ? 'From time card, edited by hand' : 'From time card') + '">' + IC().lock + '</span>' : '') + '</button>');
     }
     return h + cells.join('') + '</div>';
   };
-  V.alChip = function (y) { var l = R.alLeft(y); if (l === null) return ''; return '<span class="chip ' + (l <= 0 ? 'bad' : l <= 2 ? 'amber' : 'good') + '" title="Annual leave left in ' + y + '">AL ' + y + ': ' + (l <= 0 ? '0 left' : l + ' left') + '</span>'; };
   V.legend = function (plan) {
-    return '<div class="legend"><span><i style="background:var(--amber-soft)"></i>OT</span><span><i style="background:var(--good-soft)"></i>2× day</span><span><i style="background:var(--blue-soft)"></i>Leave / PH</span><span><i style="background:var(--bad-soft)"></i>Unpaid / AL ✕</span><span>' + IC().flag + 'Public holiday</span>' + (plan ? '<span><i style="border:1.5px dashed var(--accent);background:transparent"></i>Planned (overrides the real day)</span><span><i style="border:1.5px dashed var(--accent);background:var(--accent-soft)"></i>Target</span>' : '<span><i style="border-left:3px solid var(--good);background:var(--surface)"></i>Time card (locked)</span><span><i style="background:var(--surface);opacity:.5"></i>Future (locked)</span>') + '<span><i style="border:1.5px dashed var(--bad);background:transparent"></i>Not filled yet</span></div>';
+    return '<div class="card" style="padding:12px 14px"><div class="legend"><span><i style="background:var(--amber-soft)"></i>Overtime</span><span><i style="background:var(--blue-soft)"></i>Leave or holiday</span><span><i style="background:var(--bad-soft)"></i>Unpaid</span><span><i style="background:var(--good-soft)"></i>2× day</span>' +
+      (plan ? '<span><i style="border:1.5px dashed var(--accent)"></i>Planned</span>' : '<span><i style="background:var(--good)"></i>From time card, locked</span><span><i style="border:1.5px dashed var(--bad)"></i>Not filled</span><span><i style="background:var(--surface-2);opacity:.45"></i>Ahead: leave only</span>') + '</div></div>';
   };
 
   V.cal = function (UI) {
     var S = St.S, ym = UI.ym, p = U.parseYm(ym), days = S.months[ym] || {}, H = R.halves(ym, days), M = R.money(ym, H);
-    var td = U.today(), isCur = td.y === p.y && td.m === p.m;
+    var td = U.today(), isCur = td.y === p.y && td.m === p.m, al = R.alLeft(p.y);
     var h = '<div class="calwrap"><div class="col">';
-    h += '<div class="cal-head"><button class="icon-btn" data-mon="-1" aria-label="Previous month">' + IC().left + '</button><div style="text-align:center"><h2>' + MONTHS[p.m - 1] + ' ' + p.y + '</h2><span class="tiny muted">Basic RM' + fm(M.r.basic) + ' · OT RM' + fm(M.r.r15) + '/h</span><div class="row" style="margin-top:4px;justify-content:center;gap:6px">' + V.alChip(p.y) + (isCur ? '' : ' <button class="chip accent" data-act="calToday" style="border:0;cursor:pointer">Today</button>') + '<button class="chip" data-act="extract" style="border:0;cursor:pointer" title="Open this month in Plan to try what-ifs">' + IC().plan.replace('<svg', '<svg style="width:13px;height:13px"') + ' Extract to Plan</button></div></div><button class="icon-btn" data-mon="1" aria-label="Next month">' + IC().right + '</button></div>';
-    h += V.brushBar(UI, p.y, M, 'cal');
-    h += '<div class="card" style="padding:10px">' + V.monthGrid(ym, days, { mode: 'cal' }) + '</div>';
-    h += V.legend(false);
-    h += '<p class="tiny muted">Each day shows clock-out, <b style="color:var(--good)">+</b>/<b style="color:var(--bad)">−</b> hours against the normal end (17:30, Sat 11:30), and the day total in RM (base ' + (S.settings.baseMode === 'hour' ? 'by scheduled hours' : 'RM' + fm(M.r.day) + '/day') + ' + OT − unpaid). An empty weekday counts as a normal day. To try what-ifs for the days ahead, use Extract to Plan.</p>';
+    h += '<div class="cal-head"><button class="icon-btn" data-mon="-1" aria-label="Previous month">' + IC().left + '</button><h2>' + MONTHS[p.m - 1] + ' ' + p.y + '</h2><button class="icon-btn" data-mon="1" aria-label="Next month">' + IC().right + '</button></div>';
+    h += '<div class="cal-tools">' + (isCur ? '' : '<button class="tool" data-act="calToday">Today</button>') + '<button class="tool" data-act="paint" aria-pressed="' + !!UI.paint + '"><i class="ic ic-pencil-edit"></i>Paint</button><button class="tool" data-act="extract"><i class="ic ic-horizontal-sliders-lines"></i>Plan this month</button><span class="grow"></span><button class="tool" data-act="legend" aria-pressed="' + !!UI.legend + '" aria-label="What the colours mean"><i class="ic ic-info-circle"></i></button></div>';
+    if (UI.paint) h += V.brushBar(UI, p.y, M);
+    if (UI.legend) h += V.legend(false);
+    h += '<div class="card" style="padding:12px">' + V.monthGrid(ym, days, { mode: 'cal' }) + '</div>';
     h += '</div><div class="col">';
-    h += V.monthSummary(ym, M, H);
-    h += '<div class="row"><button class="btn danger" data-act="clearMonth">' + (UI.clearArm ? 'Tap again to clear ' + MON3[p.m - 1] : 'Clear this month') + '</button><span class="tiny muted">Clears only days you entered by hand; time-card days stay.</span></div>';
+    h += '<section class="card"><div class="stats3"><div><span>Take-home</span><b>' + fm(M.net) + '</b></div><div><span>Overtime</span><b>' + U.fh1(M.ot + M.ot2) + ' h</b></div><div><span>Unpaid</span><b>' + (M.up ? M.up + ' d' : 'none') + '</b></div></div>' +
+      (al === null ? '' : '<p class="small muted" style="margin-top:12px">Annual leave ' + p.y + ': <b style="color:var(--' + (al <= 0 ? 'bad' : 'ink') + ')">' + al + ' left</b>' + (al <= 0 ? ', so AL counts as unpaid' : '') + '</p>') +
+      '<details class="fold-in" id="calDet"' + Ga.fold('calDet') + '><summary><span>Breakdown by half</span></summary>' + V.monthSummary(ym, M, H, true) +
+      '<div class="row" style="margin-top:12px"><button class="btn danger sm" data-act="clearMonth">' + (UI.clearArm ? 'Tap again to clear ' + MON3[p.m - 1] : 'Clear days I entered') + '</button></div></details></section>';
     return h + '</div></div>';
   };
 

@@ -14,28 +14,26 @@
   function monthsInRange(UI) { var out = []; for (var i = 0; i < UI.plN; i++) out.push(U.addYm(UI.plStart, i)); return out; }
 
   V.plan = function (UI) {
-    var S = St.S, start = UI.plStart, n = UI.plN, F = R.forecast(start, n, null), p0 = U.parseYm(start), last = U.parseYm(U.addYm(start, n - 1)), P = UI.planA, planCount = 0;
-    monthsInRange(UI).forEach(function (ym) { planCount += Object.keys((S.plans.days[ym]) || {}).length; });
-    var h = '<div class="stack">';
-    h += '<section class="card"><div class="card-h"><div><h2>Plan ' + n + ' month' + (n > 1 ? 's' : '') + '</h2><span class="small muted">' + MONTHS[p0.m - 1] + ' ' + p0.y + (n > 1 ? ' – ' + MONTHS[last.m - 1] + ' ' + last.y : '') + ' · what-if, separate from the Calendar</span></div>' +
-      '<div class="row"><div class="field" style="flex:0 0 170px"><select id="plStart" aria-label="First month">' + Ga.ymOptions(start, false, '2029-12') + '</select></div>' + V.stepper('plN', n, 'plstep') + '</div></div>';
-    h += '<div class="plan-res"><div class="eyebrow">Take-home total · ' + n + ' month' + (n > 1 ? 's' : '') + '</div><div class="v">RM' + fm(F.total.net) + '</div><div class="tiny muted">OT ' + fh(F.total.ot) + 'h' + (F.total.ot2 ? ' + ' + fh(F.total.ot2) + 'h 2×' : '') + ' · gross RM' + fm(F.total.gross) + ' · deductions RM' + fm(F.total.ded) + (F.total.up ? ' · unpaid ' + F.total.up + 'd' : '') + ' · ' + planCount + ' planned day' + (planCount === 1 ? '' : 's') + '</div></div>';
-    h += V.breakdown(F, start);
-    h += '<details class="tg-rules" style="margin-top:12px"' + (UI.plFillOpen ? ' open' : '') + ' id="plFillDet"><summary><b>Fill empty days</b><span class="small muted">&nbsp;· ' + planLabel(P) + '</span></summary><div class="stack" style="gap:10px;margin-top:12px">' +
-      '<div class="row"><div class="field"><label for="pamt">Mon–Thu out</label>' + planSel('pamt', P.mt) + '</div><div class="field"><label for="pafr">Friday out</label>' + planSel('pafr', P.fr) + '</div><div class="field"><label for="pasa">Saturday out</label>' + planSel('pasa', P.sa, 1) + '</div><div class="field"><label for="paph">Public holiday</label><select id="paph"><option value="rest"' + (P.ph === 'rest' ? ' selected' : '') + '>Rest</option><option value="work"' + (P.ph === 'work' ? ' selected' : '') + '>Work (2×)</option></select></div></div>' +
-      '<div class="row"><button class="btn primary" data-act="plFill">Fill empty days in these ' + n + ' month' + (n > 1 ? 's' : '') + '</button><button class="btn danger" data-act="plClear">' + (UI.plClearArm ? 'Tap again to remove planned days' : 'Remove planned days') + '</button></div>' +
-      '<p class="tiny muted">Fill touches days in this range that have nothing on the Calendar and nothing planned yet. Remove clears every planned day in this range, so the months fall back to the Calendar. The Calendar is never changed from here.</p></div></details>';
-    h += V.target(UI);
-    h += '</section>';
-    h += V.brushBar(UI, p0.y, F.months[0].M, 'plan');
-    h += '<div class="grid2 plgrid">';
+    var S = St.S, start = UI.plStart, n = UI.plN, F = R.forecast(start, n, null), P = UI.planA, planCount = 0, months = monthsInRange(UI);
+    months.forEach(function (ym) { planCount += Object.keys(S.plans.days[ym] || {}).length; });
+    if (UI.plOpen === undefined) UI.plOpen = months[0];
+    var h = '<div class="stack narrow"><section class="card">';
+    h += '<div class="row" style="margin-bottom:18px;align-items:flex-end"><div class="field" style="flex:1 1 170px"><label for="plStart">From</label><select id="plStart">' + Ga.ymOptions(start, false, '2029-12') + '</select></div><div class="field" style="flex:0 0 auto"><label for="plN">Months</label>' + V.stepper('plN', n, 'plstep') + '</div></div>';
+    h += '<div class="bigstat"><span class="eyebrow">Take-home · ' + n + ' month' + (n > 1 ? 's' : '') + '</span><b>RM' + fm(F.total.net) + '</b><small>OT ' + fh1(F.total.ot + F.total.ot2) + ' h · ' + planCount + ' planned day' + (planCount === 1 ? '' : 's') + (F.total.up ? ' · unpaid ' + F.total.up + ' d' : '') + '</small></div>';
+    h += '<div class="mlist">';
     F.months.forEach(function (m) {
-      var q = U.parseYm(m.ym), M = m.M, rec = S.records[m.ym + '-1'] || S.records[m.ym + '-2'], tg = S.targets[m.ym], sugg = tg && tg.sugg && Object.keys(tg.sugg).length ? tg.sugg : null;
-      h += '<section class="card" style="padding:10px"><div class="card-h" style="margin-bottom:6px"><div><h3 style="font-size:15px">' + MONTHS[q.m - 1] + ' ' + q.y + '</h3><span class="tiny muted">OT ' + fh(M.ot) + 'h' + (M.ot2 ? ' + ' + fh(M.ot2) + 'h 2×' : '') + (M.up ? ' · unpaid ' + M.up + 'd' : '') + ' · H1 ' + fm(M.half1) + ' · H2 ' + fm(M.half2) + '</span></div><div style="text-align:right"><span class="chip accent">RM' + fm(M.net) + '</span>' + (rec ? '<br><span class="tiny muted">payslip saved</span>' : '') + '</div></div>' + V.monthGrid(m.ym, R.planDays(m.ym), { compact: true, mode: 'plan', sugg: sugg }) + '<div style="margin-top:8px">' + V.monthSummary(m.ym, M, M.H, true) + '</div>' + '<div class="row" style="margin-top:6px;justify-content:flex-end"><button class="btn ghost sm" data-goym="' + m.ym + '" data-go="cal">Open in Calendar</button></div></section>';
+      var q = U.parseYm(m.ym), M = m.M, open = UI.plOpen === m.ym, tg = S.targets[m.ym], sugg = tg && tg.sugg && Object.keys(tg.sugg).length ? tg.sugg : null;
+      h += '<button class="mrow" data-plopen="' + m.ym + '" aria-expanded="' + open + '"><div><b>' + MONTHS[q.m - 1] + ' ' + q.y + '</b><span>1st ' + fm(M.half1) + ' · 2nd ' + fm(M.half2) + ' · OT ' + fh1(M.ot + M.ot2) + ' h</span></div><strong>RM' + fm(M.net) + '</strong></button>';
+      if (open) h += '<div class="mopen"><div class="cal-tools"><button class="tool" data-act="paint" aria-pressed="' + !!UI.paint + '"><i class="ic ic-pencil-edit"></i>Paint</button><span class="grow"></span><button class="tool" data-goym="' + m.ym + '" data-go="cal"><i class="ic ic-calendar-dots"></i>Open in Calendar</button></div>' +
+        (UI.paint ? V.brushBar(UI, q.y, M) : '') + V.monthGrid(m.ym, R.planDays(m.ym), { compact: true, mode: 'plan', sugg: sugg }) + V.monthSummary(m.ym, M, M.H, true) + '</div>';
     });
-    h += '</div>' + V.legend(true);
-    h += '<p class="tiny muted">Pick a brush, then tap any day in any month, past or future. A planned day overrides the real one here only; the Calendar keeps the real data.</p>';
-    h += '<details class="card"' + (UI.cmpOpen ? ' open' : '') + ' id="cmpDet"><summary style="cursor:pointer;font-weight:600">Compare two patterns for one month</summary><div style="margin-top:12px">' + compare(UI) + '</div></details>';
+    h += '</div><p class="tiny muted" style="margin-top:12px">What-if only. Tap a month, then tap any day to plan it. The Calendar keeps the real data.</p></section>';
+    h += '<details class="card fold" id="plFillDet"' + (UI.plFillOpen ? ' open' : '') + '><summary><h2>Fill empty days</h2><span class="sub">' + planLabel(P) + '</span></summary>' +
+      '<div class="row"><div class="field"><label for="pamt">Mon–Thu out</label>' + planSel('pamt', P.mt) + '</div><div class="field"><label for="pafr">Friday out</label>' + planSel('pafr', P.fr) + '</div><div class="field"><label for="pasa">Saturday out</label>' + planSel('pasa', P.sa, 1) + '</div><div class="field"><label for="paph">Public holiday</label><select id="paph"><option value="rest"' + (P.ph === 'rest' ? ' selected' : '') + '>Rest</option><option value="work"' + (P.ph === 'work' ? ' selected' : '') + '>Work (2×)</option></select></div></div>' +
+      '<div class="row" style="margin-top:14px"><button class="btn primary" data-act="plFill">Fill ' + n + ' month' + (n > 1 ? 's' : '') + '</button><button class="btn danger" data-act="plClear">' + (UI.plClearArm ? 'Tap again to remove' : 'Remove planned days') + '</button></div></details>';
+    h += V.target(UI);
+    h += '<details class="card fold" id="plTblDet"' + Ga.fold('plTblDet') + '><summary><h2>Full table</h2><span class="sub">every month, by half</span></summary>' + V.breakdown(F, start) + '</details>';
+    h += '<details class="card fold" id="cmpDet"' + (UI.cmpOpen ? ' open' : '') + '><summary><h2>Compare two patterns</h2></summary>' + compare(UI) + '</details>';
     return h + '</div>';
   };
 
@@ -43,7 +41,7 @@
     return '<div class="stepper" role="group" aria-label="Number of months"><button type="button" data-' + step + '="-1" aria-label="Fewer months">−</button><input id="' + id + '" type="number" inputmode="numeric" min="1" max="48" value="' + val + '" aria-label="Months"><button type="button" data-' + step + '="1" aria-label="More months">+</button></div>';
   };
   V.breakdown = function (F, start) {
-    var h = '<div class="tbl-wrap" style="margin-top:10px"><table class="brk"><thead><tr><th>Period</th><th class="r">OT 1.5× h</th><th class="r">OT 2× h</th><th class="r">Basic</th><th class="r">OT RM</th><th class="r">Unpaid</th><th class="r">Earnings</th><th class="r">Deduct.</th><th class="r">Net</th></tr></thead><tbody>';
+    var h = '<div class="tbl-wrap"><table class="brk"><thead><tr><th>Period</th><th class="r">OT 1.5× h</th><th class="r">OT 2× h</th><th class="r">Basic</th><th class="r">OT RM</th><th class="r">Unpaid</th><th class="r">Earnings</th><th class="r">Deduct.</th><th class="r">Net</th></tr></thead><tbody>';
     var T = { ot: 0, ot2: 0, basic: 0, otRm: 0, up: 0, earn: 0, ded: 0, net: 0 };
     var row = function (lab, ot, ot2, basic, otRm, up, earn, ded, net, cls) { return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + lab + '</td><td class="r">' + fh(ot) + '</td><td class="r">' + (ot2 ? fh(ot2) : '—') + '</td><td class="r">' + fm(basic) + '</td><td class="r">' + (otRm ? '+' + fm(otRm) : '—') + '</td><td class="r">' + (up ? '−' + fm(up) : '—') + '</td><td class="r">' + fm(earn) + '</td><td class="r">' + (ded ? '−' + fm(ded) : '—') + '</td><td class="r"><b>' + fm(net) + '</b></td></tr>'; };
     F.months.forEach(function (m) {
@@ -85,7 +83,7 @@
   V.target = function (UI) {
     var S = St.S, months = monthsInRange(UI); if (months.indexOf(UI.plTgYm) < 0) UI.plTgYm = months[0];
     var ym = UI.plTgYm, p = U.parseYm(ym), tg = S.targets[ym] || null, M = R.forecastMonth(ym, null), open = UI.targetOpen || !!(tg && tg.target);
-    var h = '<details class="tg-rules" style="margin-top:12px"' + (open ? ' open' : '') + ' id="tgOuter"><summary><b>Target</b><span class="small muted">&nbsp;· reach a take-home amount by adding planned OT days</span></summary><div class="stack" style="gap:10px;margin-top:12px">';
+    var h = '<details class="card fold"' + (open ? ' open' : '') + ' id="tgOuter"><summary><h2>Target</h2><span class="sub">reach an amount with planned OT</span></summary><div class="stack" style="gap:10px">';
     h += '<div class="row"><div class="field" style="flex:0 0 170px"><label for="plTgYm">Month</label><select id="plTgYm">' + months.map(function (m) { var q = U.parseYm(m); return '<option value="' + m + '"' + (m === ym ? ' selected' : '') + '>' + MONTHS[q.m - 1] + ' ' + q.y + '</option>'; }).join('') + '</select></div><div class="field"><label for="tgIn">Take-home target (RM)</label><input id="tgIn" inputmode="numeric" value="' + (tg && tg.target || '') + '" placeholder="e.g. 4500"></div><button class="btn primary" data-act="tgGo" style="align-self:flex-end">Suggest days</button></div>';
     h += '<p class="tiny muted">' + MONTHS[p.m - 1] + ' now: RM' + fm(M.net) + ' take-home with what is planned.</p>';
     h += tgRules(UI);
