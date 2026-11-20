@@ -107,6 +107,8 @@
   Cat.set = function (on) { St.lsSet(KEY, on ? '1' : '0'); Cat.init(); };
   Cat.cheer = function () { if (!el) return; if (C.state === 'sleep') return; set('meow', 1500); say(['nice!', 'purr', 'saved'][rnd(3)], 1500); draw(); };
   Cat.say = say;
+  /* Draw one pose onto any 20×14 canvas (used by the payday quest on Home). */
+  Cat.sprite = function (canvas, pose, f) { var old = ctx; ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, W, H); if (pose === 'sit') sit(f || 1, true); else walk(f || 0); ctx = old; };
   Cat.init = function () {
     host = document.getElementById('cat'); if (!host) return;
     clearInterval(timer); timer = null; host.innerHTML = ''; el = null;

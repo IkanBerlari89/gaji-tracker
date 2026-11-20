@@ -23,7 +23,7 @@
     var t = U.today(), todayIso = U.iso(t.y, t.m, t.d);
     if (!UI.trackDate || UI.trackDate > todayIso) UI.trackDate = todayIso;
     var td = parseIso(UI.trackDate), cp = { ym: td.ym, h: td.d <= 15 ? 1 : 2 }, M = R.assumedMoney(cp.ym), miss = Ga.missing();
-    return '<div class="home"><div class="col">' + hero(UI, cp, M, td) + trackerCard(UI, todayIso, miss) + '</div><div class="col">' + trendCard(UI) + slipsFold(UI) + '</div></div>';
+    return '<div class="home"><div class="col">' + hero(UI, cp, M, td) + questCard() + trackerCard(UI, todayIso, miss) + '</div><div class="col">' + trendCard(UI) + slipsFold(UI) + '</div></div>';
   };
 
   /* Hero: the predicted payslip for the half of the tracked date. Three supporting numbers; the breakdown is behind Details. */
@@ -97,7 +97,7 @@
     if (!max) max = 1;
     var step = opt.step(max), top = Math.ceil(max / step) * step, slot = (W - padL - 6) / pts.length, ns = opt.n;
     var y = function (v) { return padT + (Hh - padT - padB) * (1 - v / top); }, y0 = y(0);
-    var s = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="' + esc(opt.label) + '">';
+    var s = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="' + esc(opt.label) + '">', line = [];
     for (var g = 0; g <= top + 1e-9; g += step) s += '<line class="grid" x1="' + padL + '" x2="' + W + '" y1="' + y(g) + '" y2="' + y(g) + '"/><text class="ax" x="' + (padL - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end">' + opt.fmtAx(g) + '</text>';
     pts.forEach(function (p, i) {
       var x0 = padL + i * slot, vals = opt.vals(p), bw = Math.min(narrow ? 14 : 22, (slot - 8) / ns), gap = 2, total = ns * bw + (ns - 1) * gap, start = x0 + (slot - total) / 2;
@@ -105,19 +105,51 @@
         if (v == null) return;
         var x = start + k * (bw + gap), yy = y(v), hgt = Math.max(0, y0 - yy);
         s += '<path d="M' + x + ' ' + y0 + ' v-' + Math.max(0, hgt - 4) + ' a4 4 0 0 1 4 -4 h' + (bw - 8) + ' a4 4 0 0 1 4 4 v' + Math.max(0, hgt - 4) + ' z" fill="var(--c' + (k + 1) + ')"' + (p.current && k === 0 ? ' opacity=".55"' : '') + '/>';
-        s += '<text class="lbl' + (ns > 1 ? ' sm' : '') + '" x="' + (x + bw / 2) + '" y="' + (yy - 4) + '" text-anchor="middle">' + opt.lab(v) + '</text>';
+        if (k === 0 && opt.line) line.push([x + bw / 2, yy]);
+        s += '<text class="lbl' + (ns > 1 ? ' sm' : '') + '" x="' + (x + bw / 2) + '" y="' + (yy - (k === 0 && opt.line ? 9 : 4)) + '" text-anchor="middle">' + opt.lab(v) + '</text>';
       });
       s += '<text class="ax" x="' + (x0 + slot / 2) + '" y="' + (Hh - 8) + '" text-anchor="middle">' + esc(p.label) + '</text>';
       s += '<rect class="hit" data-tip="' + esc(opt.tip(p)) + '" data-ym="' + p.ym + '" x="' + x0 + '" y="' + padT + '" width="' + slot + '" height="' + (Hh - padT) + '"/>';
     });
+    if (line.length > 1) s += '<polyline class="trend" points="' + line.map(function (q) { return q[0] + ',' + q[1]; }).join(' ') + '"/>' + line.map(function (q) { return '<circle class="dot" cx="' + q[0] + '" cy="' + q[1] + '" r="3.5"/>'; }).join('');
     return s + '</svg>';
   }
   function trendCard(UI) {
     var byMonth = UI.chartScope === 'month', unit = byMonth ? 'month' : 'half', pts = series(byMonth);
+    pts.forEach(function (p, i) { p.delta = i ? p.est - pts[i - 1].est : null; });
+    var lastP = pts[pts.length - 1], dl = lastP && lastP.delta, arrow = function (v) { return (v >= 0 ? '▲ +' : '▼ −') + fm(Math.abs(v)); };
     return '<section class="card"><div class="card-h"><h2>Net pay per ' + unit + '</h2><div class="seg"><button data-chart-scope="half" aria-pressed="' + !byMonth + '">Half</button><button data-chart-scope="month" aria-pressed="' + byMonth + '">Month</button></div></div>' +
-      '<div class="legend" style="margin-bottom:8px"><span><i style="background:var(--c1)"></i>Estimate</span><span><i style="background:var(--c2)"></i>Payslip</span></div>' +
-      '<div class="chart" data-chart="1">' + bars(pts, { label: 'Net pay per ' + unit, n: 2, vals: function (p) { return [p.est, p.act]; }, step: function (m) { return m > 3000 ? 1000 : 500; }, fmtAx: function (g) { return g ? (g / 1000) + 'k' : '0'; },
-        lab: function (v) { return narrowScreen() ? (v / 1000).toFixed(1) + 'k' : Math.round(v); }, tip: function (p) { return p.name + '|Estimate RM' + fm(p.est) + (p.act != null ? ' · Payslip RM' + fm(p.act) + ' (' + (p.act - p.est >= 0 ? '+' : '−') + fm(Math.abs(p.act - p.est)) + ')' : p.partial ? ' · payslip for one half only' : '') + (p.current ? ' · in progress' : ''); } }) + '</div></section>';
+      '<div class="legend" style="margin-bottom:10px"><span><i style="background:var(--c1)"></i>Estimate</span><span><i style="background:var(--c2)"></i>Payslip</span><span><i class="ln"></i>Trend</span>' +
+      (dl != null ? '<span class="chip ' + (dl >= 0 ? 'good' : 'bad') + '" style="margin-left:auto">' + arrow(dl) + ' vs last ' + unit + '</span>' : '') + '</div>' +
+      '<div class="chart" data-chart="1">' + bars(pts, { label: 'Net pay per ' + unit, n: 2, line: true, vals: function (p) { return [p.est, p.act]; }, step: function (m) { return m > 3000 ? 1000 : 500; }, fmtAx: function (g) { return g ? (g / 1000) + 'k' : '0'; },
+        lab: function (v) { return narrowScreen() ? (v / 1000).toFixed(1) + 'k' : Math.round(v); },
+        tip: function (p) { return p.name + '|Estimate RM' + fm(p.est) + (p.delta != null ? ' (' + arrow(p.delta) + ')' : '') + (p.act != null ? ' · Payslip RM' + fm(p.act) : p.partial ? ' · payslip for one half only' : '') + (p.current ? ' · in progress' : ''); } }) + '</div></section>';
+  }
+
+  /* Payday quest: an RPG-style countdown from the last payday to the next one. */
+  function payCycle() {
+    var t = U.today(), now = new Date(t.y, t.m - 1, t.d), list = [new Date(t.y, t.m - 2, 20), new Date(t.y, t.m - 1, 5), new Date(t.y, t.m - 1, 20), new Date(t.y, t.m, 5), new Date(t.y, t.m, 20)];
+    var next = list.filter(function (d) { return d >= now; })[0], prev = list.filter(function (d) { return d < now; }).pop();
+    var ym = U.ymOf(next.getFullYear(), next.getMonth() + 1), h = 1;
+    if (next.getDate() === 5) { ym = U.addYm(ym, -1); h = 2; }
+    var total = Math.round((next - prev) / 864e5), done = Math.round((now - prev) / 864e5), M = R.assumedMoney(ym);
+    return { next: next, total: total, done: done, left: total - done, ym: ym, h: h, loot: h === 1 ? M.half1 : M.half2 };
+  }
+  function questCard() {
+    if (!St.isSetUp()) return '';
+    var q = payCycle(), blocks = '', p = Math.max(0, Math.min(1, q.done / q.total));
+    for (var i = 1; i <= q.total; i++) blocks += '<i class="' + (i <= q.done ? 'on' : '') + (i === q.done + 1 ? ' now' : '') + '"></i>';
+    return '<section class="quest" aria-label="Payday in ' + q.left + ' days, ' + U.periodName(q.ym, q.h) + ', about RM' + fm(q.loot) + '">' +
+      '<div class="q-top"><span>Quest: payday</span><span class="q-left">' + (q.left === 0 ? 'Payday!' : q.left + ' day' + (q.left === 1 ? '' : 's') + ' left') + '</span></div>' +
+      '<div class="q-track"><div class="q-road"><canvas class="q-hero" width="20" height="14" data-done="' + (q.left === 0 ? 1 : 0) + '" style="left:' + (p * 100).toFixed(1) + '%"></canvas><div class="q-bar">' + blocks + '</div></div><canvas class="q-chest" width="14" height="12" data-open="' + (q.left === 0 ? 1 : 0) + '"></canvas></div>' +
+      '<div class="q-foot"><span>Loot RM' + fm(q.loot) + '</span><span>' + q.next.getDate() + ' ' + MON3[q.next.getMonth()] + ' · ' + MON3[U.parseYm(q.ym).m - 1] + ' ' + (q.h === 1 ? '1st' : '2nd') + '</span></div></section>';
+  }
+  function drawChest(cv) {
+    var c = cv.getContext('2d'), open = cv.dataset.open === '1', px = function (x, y, w, h, col) { c.fillStyle = col; c.fillRect(x, y, w, h); };
+    c.clearRect(0, 0, 14, 12);
+    if (open) { px(4, 1, 2, 2, '#F6C343'); px(8, 0, 2, 2, '#FFE9A3'); px(6, 3, 2, 1, '#F6C343'); px(2, 3, 10, 2, '#3A2A10'); }
+    else { px(1, 2, 12, 3, '#B9793A'); px(1, 2, 12, 1, '#D9A066'); }
+    px(1, 5, 12, 1, '#F6C343'); px(1, 6, 12, 5, '#8B5A2B'); px(1, 10, 12, 1, '#6E4420'); px(6, 5, 2, 3, '#F6C343'); px(6, 6, 2, 1, '#3A2A10'); px(0, 11, 14, 1, '#3A2A10');
   }
 
   /* Payslips: folded away until wanted. */
@@ -140,6 +172,15 @@
 
   /* chart hover/tap layer */
   V.wireCharts = function (root) {
+    clearInterval(Ga._questT);
+    var chest = root.querySelector('.q-chest'), heroC = root.querySelector('.q-hero');
+    if (chest) drawChest(chest);
+    if (heroC && Ga.cat && Ga.cat.sprite) {
+      var done = heroC.dataset.done === '1', f = 0, still = false;
+      try { still = G.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+      Ga.cat.sprite(heroC, done ? 'sit' : 'walk', 0);
+      if (!done && !still) Ga._questT = setInterval(function () { if (!document.body.contains(heroC)) { clearInterval(Ga._questT); return; } Ga.cat.sprite(heroC, 'walk', ++f); }, 260);
+    }
     root.querySelectorAll('.chart[data-chart]').forEach(function (ch) {
       var tip = null;
       var show = function (el) {

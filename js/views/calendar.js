@@ -40,7 +40,7 @@
       else if (c.ph) lbl = 'PH'; else if (isMiss) lbl = '?';
       var say = ee ? (ee.k === 'W' ? 'out ' + (ee.out || '') + (c.ot ? ', OT ' + U.fh1(c.ot) + ' hours' : '') : (LEAVES[ee.k] || ee.k)) : c.ph ? 'public holiday' : isMiss ? 'not filled' : 'empty';
       cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (planned ? ' planned' : '') + (locked ? ' locked' : '') + (future && !plan && !e ? ' future' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + ', ' + esc(say) + (real && !plan ? ', from time card' : planned ? ', planned' : '') + '">' +
-        '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span><span class="lbl">' + lbl + '</span>' +
+        '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span><span class="lbl">' + lbl + '</span>' + ((c.t === 'SU' && !c.ot2) || isMiss ? '' : '<span class="rm">RM' + (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total)) + '</span>') +
         (real && !plan ? '<span class="tag lock' + (e.edited ? ' ed' : '') + '" title="' + (e.edited ? 'From time card, edited by hand' : 'From time card') + '">' + IC().lock + '</span>' : '') + '</button>');
     }
     return h + cells.join('') + '</div>';
@@ -55,8 +55,7 @@
     var td = U.today(), isCur = td.y === p.y && td.m === p.m, al = R.alLeft(p.y);
     var h = '<div class="calwrap"><div class="col">';
     h += '<div class="cal-head"><button class="icon-btn" data-mon="-1" aria-label="Previous month">' + IC().left + '</button><h2>' + MONTHS[p.m - 1] + ' ' + p.y + '</h2><button class="icon-btn" data-mon="1" aria-label="Next month">' + IC().right + '</button></div>';
-    h += '<div class="cal-tools">' + (isCur ? '' : '<button class="tool" data-act="calToday">Today</button>') + '<button class="tool" data-act="paint" aria-pressed="' + !!UI.paint + '"><i class="ic ic-pencil-edit"></i>Paint</button><button class="tool" data-act="extract"><i class="ic ic-horizontal-sliders-lines"></i>Plan this month</button><span class="grow"></span><button class="tool" data-act="legend" aria-pressed="' + !!UI.legend + '" aria-label="What the colours mean"><i class="ic ic-info-circle"></i></button></div>';
-    if (UI.paint) h += V.brushBar(UI, p.y, M);
+    h += '<div class="cal-tools">' + (isCur ? '' : '<button class="tool" data-act="calToday">Today</button>') + '<button class="tool" data-act="extract"><i class="ic ic-horizontal-sliders-lines"></i>Extract to Plan</button><span class="chip"><i class="ic ic-lock-keyhole"></i>Real data</span><span class="grow"></span><button class="tool" data-act="legend" aria-pressed="' + !!UI.legend + '" aria-label="What the colours mean"><i class="ic ic-info-circle"></i></button></div>';
     if (UI.legend) h += V.legend(false);
     h += '<div class="card" style="padding:12px">' + V.monthGrid(ym, days, { mode: 'cal' }) + '</div>';
     h += '</div><div class="col">';
@@ -90,7 +89,7 @@
   A.isFuture = function (ym, d) { var t = U.today(); return ym + '-' + pad(d) > U.iso(t.y, t.m, t.d); };
   A.applyBrush = function (UI, d, ymArg) {
     var S = St.S, ym = ymArg || UI.ym, b = UI.brush, e = (S.months[ym] || {})[pad(d)], future = A.isFuture(ym, d);
-    if (b === 'edit') { A.openDay(UI, d, ym); return; }
+    A.openDay(UI, d, ym, false, true); return;   // the Calendar never edits past days itself
     if (e && e.real) { Ga.toast('From the time card · locked. Tap it with the Edit brush and choose Unlock to correct it.'); return; }
     if (future && !(FUTURE_OK[b] || b === 'erase')) { Ga.toast('Days ahead are locked. Only AL, UPH or UPL can be set now. Use Plan for what-ifs.'); return; }
     var days = S.months[ym] || (S.months[ym] = {}), k = pad(d);
@@ -111,7 +110,7 @@
       (cc.early ? '<dt class="tiny" style="grid-column:1/-1;color:var(--bad)">Left before the scheduled end. No OT, and the time card drops to the previous 30-minute mark.</dt>' : '') +
       (cc.nr ? '<dt class="tiny" style="grid-column:1/-1">NR appears on the time card from 19:00. For you it is a label; the money is the OT hours.</dt>' : '');
   }
-  A.openDay = function (UI, d, ymArg, unlocked) {
+  A.openDay = function (UI, d, ymArg, unlocked, readonly) {
     var S = St.S, ym = ymArg || UI.ym, p = U.parseYm(ym), e = (S.months[ym] || {})[pad(d)], c = R.dayCalc(ym, d, e), future = A.isFuture(ym, d);
     var val = e ? (e.k === 'W' ? 'W' : e.k) : '', isReal = !!(e && e.real);
     if (isReal && !unlocked) {
@@ -126,6 +125,14 @@
       return;
     }
     if (isReal) future = false;
+    if (readonly && !isReal && !future) {
+      var isoD = U.iso(p.y, p.m, d);
+      Ga.sheet(dayHead(p, d, c, 'real data') + '<div class="stack"><dl class="kv"><dt>What happened</dt><dd>' + (e ? (e.k === 'W' ? 'Worked · out ' + esc(e.out) : (c.over ? 'Annual leave, no balance' : LEAVES[e.k] || e.k)) : (c.t === 'SU' ? 'Rest day' : c.ph ? 'Public holiday' : 'Not filled yet')) + '</dd><div class="sep"></div>' + resKv(c) + '</dl>' +
+        '<div class="note"><b>The Calendar shows real data.</b> Change this day from Home, or try a what-if in Plan.</div>' +
+        '<div class="row"><button class="btn primary" id="dEditHome" style="flex:1">' + (e ? 'Edit in Home' : 'Fill in Home') + '</button><button class="btn" data-close="1">Close</button></div></div>', 'dayT');
+      document.getElementById('dEditHome').onclick = function () { Ga.UI.trackDate = isoD; Ga.UI.trkType = null; Ga.UI.trkOut = null; Ga.closeLayer(); Ga.go('home'); };
+      return;
+    }
     var h = dayHead(p, d, c, isReal ? 'unlocked · locks again on save' : future ? 'ahead · leave only' : '') + '<div class="stack">';
     if (isReal) h += '<div class="note warn">Unlocked. Time card: in ' + esc(e['in'] || '—') + ', out ' + esc(e.out || '—') + (e.paid != null ? ', paid ' + fh(e.paid) + 'h' : '') + '. Change what happened, then Save; paid hours are recomputed.</div>';
     if (future) {
