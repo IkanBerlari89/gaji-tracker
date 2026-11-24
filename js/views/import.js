@@ -167,9 +167,11 @@
   };
   A.commitImport = function (UI) {
     var P = UI.pending; if (!P) return;
-    var S = St.S, paths = [];
+    var S = St.S, paths = [], questDue = Ga.questDue ? Ga.questDue() : null;
     S.months[P.ym] = R.mergedDays(P);
-    var from = P.half === 1 ? 1 : 16, to = P.half === 1 ? 15 : P.n; for (var d = from; d <= to; d++) paths.push('months/' + P.ym + '/' + pad(d));
+    var from = P.half === 1 ? 1 : 16, to = P.half === 1 ? 15 : P.n; var pl = S.plans.days[P.ym];
+    for (var d = from; d <= to; d++) { paths.push('months/' + P.ym + '/' + pad(d)); if (pl && pl[pad(d)] && S.months[P.ym][pad(d)]) { delete pl[pad(d)]; paths.push('plans/' + P.ym + '/' + pad(d)); } }
+    if (pl && !Object.keys(pl).length) delete S.plans.days[P.ym];
     var key = P.ym + '-' + P.half;
     if (P.payslip || !S.records[key]) { S.records[key] = { source: 'import', payslip: P.payslip || {}, name: P.name, importedAt: U.nowIso() }; paths.push('records/' + key); }
     var label = 'Import ' + U.periodName(P.ym, P.half).replace(' · ', ' ');
@@ -178,6 +180,9 @@
       var dt = new Date(), stamp = dt.getFullYear() + pad(dt.getMonth() + 1) + pad(dt.getDate()) + '-' + pad(dt.getHours()) + pad(dt.getMinutes());
       Sy.uploadImport(P.ym + '-H' + P.half + '_' + stamp + '.json', P.raw, label + ' (raw file)').then(function () { Ga.toast('Copy kept in GitHub'); }, function (e) { Ga.toast('Saved locally; could not upload the raw file: ' + e.message); });
     }
-    UI.pending = null; UI.ym = P.ym; Ga.toast('Saved ' + U.periodName(P.ym, P.half)); Ga.go('cal');
+    /* a payslip for the payday that was waiting completes the quest: show it on Home */
+    var claimed = questDue === key && !!(P.payslip && P.payslip.net != null);
+    if (claimed) St.lsSet('gaji-quest-wait', key);
+    UI.pending = null; UI.ym = P.ym; UI.calList = false; Ga.toast('Saved ' + U.periodName(P.ym, P.half)); Ga.go(claimed ? 'home' : 'cal');
   };
 })(window);

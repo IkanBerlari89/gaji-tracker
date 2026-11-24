@@ -1,4 +1,4 @@
-/* Calendar: real data only. Past and today are editable; future days accept only AL / UPH / UPL; imported days are locked. */
+/* Calendar: real data only, as month cards; a card opens that month. Days are changed from Home; future days accept only AL / UPH / UPL; imported days are locked. */
 (function (G) {
   'use strict';
   var Ga = G.Gaji, U = Ga.U, R = Ga.R, St = Ga.St;
@@ -40,7 +40,7 @@
       else if (c.ph) lbl = 'PH'; else if (isMiss) lbl = '?';
       var say = ee ? (ee.k === 'W' ? 'out ' + (ee.out || '') + (c.ot ? ', OT ' + U.fh1(c.ot) + ' hours' : '') : (LEAVES[ee.k] || ee.k)) : c.ph ? 'public holiday' : isMiss ? 'not filled' : 'empty';
       cells.push('<button class="day ' + k + (sg ? ' sugg' : '') + (planned ? ' planned' : '') + (locked ? ' locked' : '') + (future && !plan && !e ? ' future' : '') + (isMiss ? ' miss' : '') + (c.t === 'SU' ? ' sun' : '') + (isT ? ' today' : '') + '" data-day="' + d + '" data-ym="' + ym + '" aria-label="' + d + ' ' + MONTHS[p.m - 1] + ', ' + esc(say) + (real && !plan ? ', from time card' : planned ? ', planned' : '') + '">' +
-        '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span><span class="lbl">' + lbl + '</span>' + ((c.t === 'SU' && !c.ot2) || isMiss ? '' : '<span class="rm">RM' + (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total)) + '</span>') +
+        '<span class="dn">' + d + (c.ph ? IC().flag : '') + '</span><span class="lbl">' + lbl + '</span>' + ((c.t === 'SU' && !c.ot2) || isMiss ? '' : '<span class="rm"><i>RM</i>' + (c.ot || c.ot2 ? '<b>' + Math.round(c.total) + '</b>' : Math.round(c.total)) + '</span>') +
         (real && !plan ? '<span class="tag lock' + (e.edited ? ' ed' : '') + '" title="' + (e.edited ? 'From time card, edited by hand' : 'From time card') + '">' + IC().lock + '</span>' : '') + '</button>');
     }
     return h + cells.join('') + '</div>';
@@ -50,12 +50,36 @@
       (plan ? '<span><i style="border:1.5px dashed var(--accent)"></i>Planned</span>' : '<span><i style="background:var(--good)"></i>From time card, locked</span><span><i style="border:1.5px dashed var(--bad)"></i>Not filled</span><span><i style="background:var(--surface-2);opacity:.45"></i>Ahead: leave only</span>') + '</div></div>';
   };
 
+  /* Months the Calendar lists, oldest first: every month that has saved days, this month, and next month (only for booking leave). */
+  V.calMonths = function () {
+    var S = St.S, t = U.today(), cur = U.ymOf(t.y, t.m), set = {}; set[cur] = 1; set[U.addYm(cur, 1)] = 1;
+    Object.keys(S.months).forEach(function (ym) { if (Object.keys(S.months[ym]).length) set[ym] = 1; });
+    return Object.keys(set).sort();
+  };
+  function calCard(ym, cur) {
+    var S = St.S, p = U.parseYm(ym), days = S.months[ym] || {}, n = Object.keys(days).length, H = R.halves(ym, days), M = R.money(ym, H), ahead = ym > cur;
+    var r1 = S.records[ym + '-1'], r2 = S.records[ym + '-2'], a = r1 && r1.payslip && r1.payslip.net, b = r2 && r2.payslip && r2.payslip.net;
+    var miss = Ga.missing().filter(function (k) { return k.slice(0, 7) === ym; }).length;
+    var note = ahead ? (n ? n + ' leave day' + (n === 1 ? '' : 's') + ' booked' : 'Leave only') : miss ? miss + ' day' + (miss === 1 ? '' : 's') + ' to fill' : a != null && b != null ? 'Payslips ' + fm(a + b) : ym === cur ? 'In progress' : a != null || b != null ? 'One payslip saved' : 'No payslip yet';
+    var h = '<button class="mcard' + (ym === cur ? ' now' : '') + (ahead ? ' ahead' : '') + '" data-calopen="' + ym + '"><span class="mc-m">' + MONTHS[p.m - 1] + ' ' + p.y + '</span>';
+    if (ahead && !n) h += '<b class="mc-v sm">Book leave</b>';
+    else h += '<b class="mc-v"><small>RM</small>' + fm(M.net) + '</b><span class="mc-s">OT ' + U.fh1(M.ot + M.ot2) + ' h' + (M.up ? ' · unpaid ' + M.up + ' d' : '') + '</span>';
+    return h + '<span class="mc-s' + (miss ? ' bad' : '') + '">' + note + '</span></button>';
+  }
+
   V.cal = function (UI) {
-    var S = St.S, ym = UI.ym, p = U.parseYm(ym), days = S.months[ym] || {}, H = R.halves(ym, days), M = R.money(ym, H);
-    var td = U.today(), isCur = td.y === p.y && td.m === p.m, al = R.alLeft(p.y);
-    var h = '<div class="calwrap"><div class="col">';
-    h += '<div class="cal-head"><button class="icon-btn" data-mon="-1" aria-label="Previous month">' + IC().left + '</button><h2>' + MONTHS[p.m - 1] + ' ' + p.y + '</h2><button class="icon-btn" data-mon="1" aria-label="Next month">' + IC().right + '</button></div>';
-    h += '<div class="cal-tools">' + (isCur ? '' : '<button class="tool" data-act="calToday">Today</button>') + '<button class="tool" data-act="extract"><i class="ic ic-horizontal-sliders-lines"></i>Extract to Plan</button><span class="chip"><i class="ic ic-lock-keyhole"></i>Real data</span><span class="grow"></span><button class="tool" data-act="legend" aria-pressed="' + !!UI.legend + '" aria-label="What the colours mean"><i class="ic ic-info-circle"></i></button></div>';
+    var S = St.S, td = U.today(), cur = U.ymOf(td.y, td.m), list = V.calMonths();
+    if (UI.calList) {
+      return '<div class="stack"><p class="small muted">Real data only: this month and every month you have filled or imported. Tap a month to see its days.</p>' +
+        '<div class="mcards">' + list.filter(function (m) { return m <= cur; }).reverse().concat(list.filter(function (m) { return m > cur; })).map(function (m) { return calCard(m, cur); }).join('') + '</div></div>';
+    }
+    var ym = UI.ym, p = U.parseYm(ym), days = S.months[ym] || {}, H = R.halves(ym, days), M = R.money(ym, H), al = R.alLeft(p.y);
+    var i = list.indexOf(ym), older = i > 0 ? list[i - 1] : null, newer = i >= 0 ? list[i + 1] : null, pc = Object.keys(S.plans.days[ym] || {}).length;
+    var nav = function (to, ic, lab) { return '<button class="icon-btn"' + (to ? ' data-calopen="' + to + '"' : ' disabled') + ' aria-label="' + lab + '">' + ic + '</button>'; };
+    var h = '<div class="stack"><button class="back" data-act="calBack">' + IC().left + 'All months</button><div class="calwrap"><div class="col">';
+    h += '<div class="cal-head">' + nav(older, IC().left, 'Older month') + '<h2>' + MONTHS[p.m - 1] + ' ' + p.y + '</h2>' + nav(newer, IC().right, 'Newer month') + '</div>';
+    h += '<div class="cal-tools"><button class="tool ex' + (UI.exArm ? ' armed' : '') + '" data-act="extract"><i class="ic ic-horizontal-sliders-lines"></i><span>' + (UI.exArm ? 'Tap again: erase ' + pc + ' planned day' + (pc === 1 ? '' : 's') : 'Extract to Plan') + '</span></button><span class="chip"><i class="ic ic-lock-keyhole"></i>Real data</span><span class="grow"></span><button class="tool" data-act="legend" aria-pressed="' + !!UI.legend + '" aria-label="What the colours mean"><i class="ic ic-info-circle"></i></button></div>';
+    if (UI.exArm) h += '<p class="tiny muted">The Plan for ' + MONTHS[p.m - 1] + ' holds ' + pc + ' planned day' + (pc === 1 ? '' : 's') + '. Extract erases them, so the Plan starts as a clean copy of this month.</p>';
     if (UI.legend) h += V.legend(false);
     h += '<div class="card" style="padding:12px">' + V.monthGrid(ym, days, { mode: 'cal' }) + '</div>';
     h += '</div><div class="col">';
@@ -63,7 +87,7 @@
       (al === null ? '' : '<p class="small muted" style="margin-top:12px">Annual leave ' + p.y + ': <b style="color:var(--' + (al <= 0 ? 'bad' : 'ink') + ')">' + al + ' left</b>' + (al <= 0 ? ', so AL counts as unpaid' : '') + '</p>') +
       '<details class="fold-in" id="calDet"' + Ga.fold('calDet') + '><summary><span>Breakdown by half</span></summary>' + V.monthSummary(ym, M, H, true) +
       '<div class="row" style="margin-top:12px"><button class="btn danger sm" data-act="clearMonth">' + (UI.clearArm ? 'Tap again to clear ' + MON3[p.m - 1] : 'Clear days I entered') + '</button></div></details></section>';
-    return h + '</div></div>';
+    return h + '</div></div></div>';
   };
 
   V.monthSummary = function (ym, M, H, bare) {
@@ -99,9 +123,25 @@
     St.touchDay(ym, d, 'Calendar ' + MON3[U.parseYm(ym).m - 1] + ' ' + d); Ga.render();
   };
   A.setDay = function (ym, d, ent, msg) {
-    var S = St.S, days = S.months[ym] || (S.months[ym] = {});
-    if (!ent) delete days[pad(d)]; else days[pad(d)] = ent;
-    St.touchDay(ym, d, msg || 'Calendar ' + MON3[U.parseYm(ym).m - 1] + ' ' + d);
+    var S = St.S, days = S.months[ym] || (S.months[ym] = {}), k = pad(d), paths = ['months/' + ym + '/' + k], pl = S.plans.days[ym], missBefore = Ga.missing ? Ga.missing() : [];
+    if (!ent) delete days[k]; else days[k] = ent;
+    if (ent && pl && pl[k]) { delete pl[k]; if (!Object.keys(pl).length) delete S.plans.days[ym]; paths.push('plans/' + ym + '/' + k); }
+    St.touch(paths, msg || 'Calendar ' + MON3[U.parseYm(ym).m - 1] + ' ' + d);
+    A.reactDay(ym, d, ent, missBefore);
+  };
+  /* Sort the saved day into one of the cat's reactions (see Cat.react). */
+  A.reactDay = function (ym, d, ent, missBefore) {
+    if (!Ga.cat || !Ga.cat.react) return;
+    R.computeAL();
+    var c = R.dayCalc(ym, d, ent), iso = ym + '-' + pad(d), miss = Ga.missing ? Ga.missing() : [], was = (missBefore || []).indexOf(iso) >= 0, kind, rm = 0;
+    if (!ent) kind = 'clear';
+    else if (c.ot2) { kind = 'x2'; rm = (c.x2Amt || 0) + (c.otAmt || 0); }
+    else if (ent.k === 'W') { kind = c.early ? 'early' : c.ot >= (c.t === 'SA' ? 2 : 1.5) ? 'bigot' : c.ot > 0 ? 'ot' : 'normal'; rm = c.otAmt || 0; }
+    else if (ent.k === 'AL') { kind = c.over ? 'upl' : 'al'; if (c.over) rm = -(c.upAmt || 0); }
+    else if (ent.k === 'MC') kind = 'mc';
+    else if (ent.k === 'UPH' || ent.k === 'UPL') { kind = ent.k === 'UPH' ? 'uph' : 'upl'; rm = -(c.upAmt || 0); }
+    else kind = 'leave';
+    Ga.cat.react(kind, { rm: rm, left: was && ent ? miss.length : 0, allDone: was && !!ent && !miss.length });
   };
   function dayHead(p, d, c, extra) { return '<div class="sheet-h"><div><div class="eyebrow">' + U.DOWL[new Date(p.y, p.m - 1, d).getDay()] + (c.ph ? ' · ' + esc(c.ph) : '') + (extra ? ' · ' + extra : '') + '</div><h2 id="dayT" style="font-size:20px">' + d + ' ' + MONTHS[p.m - 1] + ' ' + p.y + '</h2></div><button class="icon-btn" data-close="1" aria-label="Close">' + IC().x + '</button></div>'; }
   function resKv(cc) {

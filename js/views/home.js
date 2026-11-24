@@ -130,23 +130,52 @@
       (lastReal ? '' : '<p class="tiny muted" style="margin-top:8px">The trend line appears once payslips are saved.</p>') + '</section>';
   }
 
-  /* Payday quest: an RPG-style countdown from the last payday to the next one. */
-  function payCycle() {
-    var t = U.today(), now = new Date(t.y, t.m - 1, t.d), list = [new Date(t.y, t.m - 2, 20), new Date(t.y, t.m - 1, 5), new Date(t.y, t.m - 1, 20), new Date(t.y, t.m, 5), new Date(t.y, t.m, 20)];
-    var next = list.filter(function (d) { return d >= now; })[0], prev = list.filter(function (d) { return d < now; }).pop();
-    var ym = U.ymOf(next.getFullYear(), next.getMonth() + 1), h = 1;
-    if (next.getDate() === 5) { ym = U.addYm(ym, -1); h = 2; }
-    var total = Math.round((next - prev) / 864e5), done = Math.round((now - prev) / 864e5), M = R.assumedMoney(ym);
-    return { next: next, total: total, done: done, left: total - done, ym: ym, h: h, loot: h === 1 ? M.half1 : M.half2 };
+  /* Payday quest. The 20th pays that month's 1st half; the 5th pays the previous month's 2nd half.
+     A payday that has arrived stays open ("claim") until its payslip is saved (import or by hand). Saving it plays the win scene, then the next quest starts from zero. */
+  var QWAIT = 'gaji-quest-wait', QSKIP = 'gaji-quest-skip', won = null, freshUntil = 0;
+  function payDays() {
+    var t = U.today(), out = [];
+    for (var k = -2; k <= 2; k++) [5, 20].forEach(function (dd) {
+      var d = new Date(t.y, t.m - 1 + k, dd), ym = U.ymOf(d.getFullYear(), d.getMonth() + 1), h = 1;
+      if (dd === 5) { ym = U.addYm(ym, -1); h = 2; }
+      out.push({ date: d, ym: ym, h: h, key: ym + '-' + h });
+    });
+    return out;
   }
+  function slipNet(key) { var r = St.S.records[key]; return r && r.payslip && r.payslip.net != null ? r.payslip.net : null; }
+  function halfName(ym, h) { return MON3[U.parseYm(ym).m - 1] + ' ' + (h === 1 ? '1st' : '2nd'); }
+  function payCycle() {
+    var t = U.today(), now = new Date(t.y, t.m - 1, t.d), list = payDays();
+    var past = list.filter(function (p) { return p.date <= now; }), due = past[past.length - 1], before = past[past.length - 2];
+    var claim = slipNet(due.key) == null && St.lsGet(QSKIP) !== due.key, q = claim ? due : list.filter(function (p) { return p.date > now; })[0], prev = claim ? before : due;
+    var total = Math.round((q.date - prev.date) / 864e5), done = claim ? total : Math.round((now - prev.date) / 864e5), M = R.assumedMoney(q.ym);
+    return { q: q, due: due, claim: claim, total: total, done: done, left: total - done, loot: q.h === 1 ? M.half1 : M.half2 };
+  }
+  /* The half whose payday has arrived and whose payslip is still missing, e.g. "2026-11-1"; null when nothing is waiting. */
+  Ga.questDue = function () { if (!St.isSetUp()) return null; var c = payCycle(); return c.claim ? c.due.key : null; };
   function questCard() {
     if (!St.isSetUp()) return '';
-    var q = payCycle(), blocks = '', p = Math.max(0, Math.min(1, q.done / q.total));
-    for (var i = 1; i <= q.total; i++) blocks += '<i class="' + (i <= q.done ? 'on' : '') + (i === q.done + 1 ? ' now' : '') + '"></i>';
-    return '<section class="quest" aria-label="Payday in ' + q.left + ' days, ' + U.periodName(q.ym, q.h) + ', about RM' + fm(q.loot) + '">' +
-      '<div class="q-top"><span>Quest: payday</span><span class="q-left">' + (q.left === 0 ? 'Payday!' : q.left + ' day' + (q.left === 1 ? '' : 's') + ' left') + '</span></div>' +
-      '<div class="q-track"><div class="q-road"><canvas class="q-hero" width="32" height="24" data-done="' + (q.left === 0 ? 1 : 0) + '" style="left:' + (p * 100).toFixed(1) + '%"></canvas><div class="q-bar">' + blocks + '</div></div><canvas class="q-chest" width="14" height="12" data-open="' + (q.left === 0 ? 1 : 0) + '"></canvas></div>' +
-      '<div class="q-foot"><span>Loot RM' + fm(q.loot) + '</span><span>' + q.next.getDate() + ' ' + MON3[q.next.getMonth()] + ' · ' + MON3[U.parseYm(q.ym).m - 1] + ' ' + (q.h === 1 ? '1st' : '2nd') + '</span></div></section>';
+    var c = payCycle(), wait = St.lsGet(QWAIT), now = Date.now();
+    if (c.claim) { if (wait !== c.due.key) St.lsSet(QWAIT, c.due.key); }
+    else if (wait) { var net = slipNet(wait); if (net != null) won = { key: wait, net: net, until: now + 3800, cheered: false }; St.lsDel(QWAIT); }
+    if (won && now < won.until) return wonCard(won, c);
+    if (won) { won = null; freshUntil = now + 1500; }
+    var q = c.q, blocks = '', p = Math.max(0, Math.min(1, c.done / c.total)), name = halfName(q.ym, q.h);
+    for (var i = 1; i <= c.total; i++) blocks += '<i class="' + (i <= c.done ? 'on' : '') + (i === c.done + 1 ? ' now' : '') + '" style="--i:' + i + '"></i>';
+    return '<section class="quest' + (c.claim ? ' claim' : '') + (now < freshUntil ? ' fresh' : '') + '" aria-label="' + (c.claim ? 'Payday reached for ' + name + '. Save the payslip to claim it.' : 'Payday in ' + c.left + ' days, ' + name + ', about RM' + fm(c.loot)) + '">' +
+      '<div class="q-top"><span>Quest: payday</span><span class="q-left">' + (c.claim ? 'Payday!' : c.left + ' day' + (c.left === 1 ? '' : 's') + ' left') + '</span></div>' +
+      '<div class="q-track"><div class="q-road"><canvas class="q-hero" width="32" height="24" data-pose="' + (c.claim ? 'sit' : 'walk') + '" style="left:max(30px,' + (p * 100).toFixed(1) + '%)"></canvas><div class="q-bar">' + blocks + '</div></div><div class="q-chest-w"><canvas class="q-chest" width="14" height="12" data-open="0"></canvas></div></div>' +
+      '<div class="q-foot"><span>Loot RM' + fm(c.loot) + '</span><span>' + q.date.getDate() + ' ' + MON3[q.date.getMonth()] + ' · ' + name + '</span></div>' +
+      (c.claim ? '<div class="q-claim"><span>Save the ' + name + ' payslip to claim</span><button class="q-btn" data-go="imp">Import</button><button class="q-btn ghost" data-act="questSkip" data-key="' + c.due.key + '">Skip</button></div>' : '') + '</section>';
+  }
+  function wonCard(w, c) {
+    var blocks = '', coins = '', i;
+    for (i = 1; i <= 15; i++) blocks += '<i class="on" style="--i:' + i + '"></i>';
+    for (i = 0; i < 7; i++) coins += '<b class="q-coin" style="--k:' + i + '"></b>';
+    return '<section class="quest won" aria-label="Payday quest complete. Payslip RM' + fm(w.net) + ' saved.">' +
+      '<div class="q-top"><span>Quest complete!</span><span class="q-left">Loot get!</span></div>' +
+      '<div class="q-track"><div class="q-road"><canvas class="q-hero" width="32" height="24" data-pose="cheer" style="left:100%"></canvas><div class="q-bar">' + blocks + '</div></div><div class="q-chest-w">' + coins + '<canvas class="q-chest" width="14" height="12" data-open="1"></canvas></div></div>' +
+      '<div class="q-foot"><span>+RM' + fm(w.net) + '</span><span>' + halfName(w.key.slice(0, 7), +w.key.slice(8)) + ' · next ' + c.q.date.getDate() + ' ' + MON3[c.q.date.getMonth()] + '</span></div></section>';
   }
   function drawChest(cv) {
     var c = cv.getContext('2d'), open = cv.dataset.open === '1', px = function (x, y, w, h, col) { c.fillStyle = col; c.fillRect(x, y, w, h); };
@@ -176,14 +205,19 @@
 
   /* chart hover/tap layer */
   V.wireCharts = function (root) {
-    clearInterval(Ga._questT);
-    var chest = root.querySelector('.q-chest'), heroC = root.querySelector('.q-hero');
+    clearInterval(Ga._questT); clearTimeout(Ga._questEnd);
+    var quest = root.querySelector('.quest'), chest = root.querySelector('.q-chest'), heroC = root.querySelector('.q-hero');
     if (chest) drawChest(chest);
     if (heroC && Ga.cat && Ga.cat.sprite) {
-      var done = heroC.dataset.done === '1', f = 0, still = false;
+      var pose = heroC.dataset.pose, f = 0, still = false;
       try { still = G.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
-      Ga.cat.sprite(heroC, done ? 'meow' : 'walk', 0, done ? 'happy' : '');
-      if (!done && !still) Ga._questT = setInterval(function () { if (!document.body.contains(heroC)) { clearInterval(Ga._questT); return; } Ga.cat.sprite(heroC, 'walk', ++f); }, 260);
+      var drawHero = function () { if (pose === 'walk') Ga.cat.sprite(heroC, 'walk', f); else if (pose === 'cheer') Ga.cat.sprite(heroC, 'meow', f, 'happy'); else Ga.cat.sprite(heroC, 'sit', f, f % 14 < 7 ? 'happy' : ''); };
+      drawHero();
+      if (!still) Ga._questT = setInterval(function () { if (!document.body.contains(heroC)) { clearInterval(Ga._questT); return; } f++; drawHero(); }, 260);
+    }
+    if (quest && quest.classList.contains('won') && won) {
+      if (!won.cheered) { won.cheered = true; if (Ga.cat && Ga.cat.cheer) Ga.cat.cheer(); }
+      Ga._questEnd = setTimeout(function () { if (Ga.UI.tab === 'home') Ga.render(); }, Math.max(200, won.until - Date.now() + 60));
     }
     root.querySelectorAll('.chart[data-chart]').forEach(function (ch) {
       var tip = null;
@@ -195,7 +229,7 @@
       };
       ch.addEventListener('pointerover', function (e) { var el = e.target.closest('.hit'); if (el) show(el); });
       ch.addEventListener('pointerout', function (e) { if (tip && !ch.contains(e.relatedTarget)) { tip.remove(); tip = null; } });
-      ch.addEventListener('click', function (e) { var el = e.target.closest('.hit'); if (el && el.dataset.ym) { Ga.UI.ym = el.dataset.ym; Ga.go('cal'); } });
+      ch.addEventListener('click', function (e) { var el = e.target.closest('.hit'); if (el && el.dataset.ym) { Ga.UI.ym = el.dataset.ym; UI.calList = false; Ga.go('cal'); } });
     });
   };
 })(window);
